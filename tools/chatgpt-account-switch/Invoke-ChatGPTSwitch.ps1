@@ -8,7 +8,9 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-[Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+# Windows can prepend a UTF-8 BOM to redirected stdin. Decode the byte stream
+# explicitly with BOM detection instead of Console.In's non-detecting reader.
+[Console]::SetIn((New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding($false,$true)), $true)))
 function Get-SafeFailure([string]$Detail) {
     switch -Regex ($Detail) {
         'cancel' { return '登录已取消。可以重新添加或登录。' }

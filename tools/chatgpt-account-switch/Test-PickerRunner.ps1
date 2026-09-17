@@ -15,7 +15,9 @@ function Complete($Job) {
 }
 $parent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $root = Join-Path $parent ('picker-runner-test-' + [guid]::NewGuid().ToString('N'))
+$originalInputEncoding = [Console]::InputEncoding
 try {
+    [Console]::InputEncoding = New-Object Text.UTF8Encoding($true)
     $null = New-Item -ItemType Directory -Path $root
     $fake = Join-Path $root 'fake switcher.ps1'
     [IO.File]::WriteAllText($fake, @'
@@ -61,6 +63,7 @@ if ($ProfileId -ne 'personal') { throw 'Wrong profile.' }
     Check (Complete (Start-PickerSwitch -Action Repair -ScriptPath $fake)).success 'Repair forwards Initialize.'
     Write-Host 'Runner tests passed with TEMP-only fake credentials.'
 } finally {
+    [Console]::InputEncoding = $originalInputEncoding
     $resolved = [IO.Path]::GetFullPath($root).TrimEnd('\')
     if (-not $resolved.StartsWith($parent + '\picker-runner-test-', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe cleanup path.' }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }

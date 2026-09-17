@@ -51,11 +51,15 @@ try {
     $info.FileName='powershell.exe'; $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $info.RedirectStandardInput=$true
     $info.EnvironmentVariables['CODEX_SWITCHER_TEST_MODE']='1'
     $info.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $PSScriptRoot 'Invoke-ChatGPTSwitch.ps1')+'" -Action Manage -SwitcherPath "'+(Join-Path $PSScriptRoot 'Switch-ChatGPTAccount.ps1')+'" -OutputPath "'+$resultFile+'" -TestSettings "'+$settingsFile+'"'
-    $process=[Diagnostics.Process]::Start($info)
+    $originalInputEncoding=[Console]::InputEncoding
+    try {
+        [Console]::InputEncoding=New-Object Text.UTF8Encoding($true)
+        $process=[Diagnostics.Process]::Start($info)
+    } finally { [Console]::InputEncoding=$originalInputEncoding }
     try {
         $name=-join([char[]]@(0x6d4b,0x8bd5))
         $payload=[Text.Encoding]::UTF8.GetBytes((@{action='add_api';displayName=$name;baseUrl='https://runner.example.test/v1';apiKey='FAKE_RUNNER_SECRET_LOCAL_TEST_ONLY';model='gpt-test'}|ConvertTo-Json -Compress))
-        $process.StandardInput.BaseStream.Write($payload,0,$payload.Length); $process.StandardInput.Close()
+        $process.StandardInput.BaseStream.Write($payload,0,$payload.Length); $process.StandardInput.BaseStream.Close()
         Check ($process.WaitForExit(15000)) 'Actual management runner terminates.'
         $resultText=[IO.File]::ReadAllText($resultFile)
         if ($process.ExitCode -ne 0 -or -not ($resultText|ConvertFrom-Json).success) {

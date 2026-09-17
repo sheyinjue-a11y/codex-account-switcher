@@ -114,7 +114,8 @@ function Start-PickerSwitch {
         }
         finally {
             if ($null -ne $payload) { [Array]::Clear($payload, 0, $payload.Length) }
-            $process.StandardInput.Close()
+            # Keep raw-byte writes separate from the unused text writer.
+            $process.StandardInput.BaseStream.Close()
         }
     }
     # No redirected stdout/stderr: descendants cannot hold a UI read open.

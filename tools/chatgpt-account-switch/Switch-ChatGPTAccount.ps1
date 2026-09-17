@@ -1272,7 +1272,7 @@ try {
         Initialize-MultiProfileSwitcher -Settings $settings -WhatIfOnly:$DryRun
     } elseif ($ManageStdin) {
         try {
-            [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+            [Console]::SetIn((New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding($false,$true)), $true)))
             $requestText = [Console]::In.ReadToEnd()
             $request = $requestText | ConvertFrom-Json -ErrorAction Stop
             Invoke-ProfileManagement -Settings $settings -Request $request | ConvertTo-Json -Depth 8
