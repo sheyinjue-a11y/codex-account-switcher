@@ -4,6 +4,8 @@ Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览
 
 这是独立的社区工具，不是 OpenAI 官方产品；切换的是 **Codex** 登录与接口，不是 ChatGPT 网页或通用 ChatGPT 聊天客户端。仅支持 Windows，界面为中文。下载包不包含任何账号、API Key 或模型额度。
 
+[下载 ZIP](https://github.com/sheyinjue-a11y/codex-account-switcher/archive/refs/heads/main.zip) · [版本发布](https://github.com/sheyinjue-a11y/codex-account-switcher/releases)
+
 ## 快速开始
 
 1. 安装官方 Codex Windows 桌面应用和 CLI，确认终端能运行 `codex.exe --version`。项目依赖 Windows PowerShell 5.1 / WPF（Windows 自带）；日常使用不需要 Python、Node.js 或开发环境。
@@ -58,7 +60,7 @@ Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览
 
 共享会话集成测试另需 Python 3.12+、`zstandard` 和官方 CLI：`python tools\chatgpt-account-switch\Test-SharedSessions.py`。它使用本地模拟服务，不发送真实付费请求。详见 [开发说明](CONTRIBUTING.md)。
 
-本版发布前需通过离线回归；真实浏览器授权、不同机器的桌面启动和真实服务连接仍需用户验收。官方客户端更新可能改变认证或配置格式；请先备份再升级。
+2026-09-17 已在 Windows PowerShell 5.1 / Codex CLI 0.154.0 下验证公开包：12 组 PowerShell/WPF 回归通过；三路由共享会话集成测试的 9 次本地模拟请求通过；PowerShell 语法及发布清单检查通过。真实浏览器授权、不同机器的桌面启动和真实服务连接仍需用户验收。官方客户端更新可能改变认证或配置格式；请先备份再升级。
 
 ## 许可证
 
