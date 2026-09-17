@@ -1277,6 +1277,9 @@ try {
             $request = $requestText | ConvertFrom-Json -ErrorAction Stop
             Invoke-ProfileManagement -Settings $settings -Request $request | ConvertTo-Json -Depth 8
         } catch {
+            if ($settings.TestMode) {
+                [Console]::Error.WriteLine('Management test failure location: '+$_.ScriptStackTrace)
+            }
             throw (Get-SafeManagementError $_.Exception.Message)
         } finally { $requestText = $null; $request = $null }
     } else {

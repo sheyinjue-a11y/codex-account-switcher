@@ -66,6 +66,9 @@ try {
         $null = & $SwitcherPath -ProfileId $ProfileId @arguments 3>$null 4>$null 5>$null 6>$null
     }
 } catch {
+    if ($TestSettings -and $env:CODEX_SWITCHER_TEST_MODE -eq '1') {
+        [Console]::Error.WriteLine('Runner test failure location: '+$_.ScriptStackTrace)
+    }
     $code = 1
     $response = @{ success = $false; message = (Get-SafeFailure -Detail $_.Exception.Message) }
 }
