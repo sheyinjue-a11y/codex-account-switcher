@@ -1,0 +1,27 @@
+# Local brainstorming/runtime files
+.superpowers/
+*.log
+*.tmp
+
+# Credentials and machine-local state
+*.env
+auth.json
+*.auth.dpapi
+*.route.dpapi
+pending-*.dpapi
+state.json
+
+# Windows-local artifacts
+*.lnk
+Thumbs.db
+Desktop.ini
+
+# Test/runtime caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Publication snapshots and distribution packages
+dist/
+*.zip
