@@ -1,12 +1,51 @@
-# Codex Account Switcher
+<p align="center">
+  <img src="assets/readme-banner.svg" alt="Codex Account Switcher — 切换账号，接着做。多个登录与 API 配置档，一份本地工作区。" width="100%">
+</p>
 
-Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览器登录多个 ChatGPT 账号，也支持保存多个 API 服务、Key 和模型；切换后继续使用同一份本地会话、项目和工作区。
+<p align="center">
+  <a href="#快速开始"><img src="https://img.shields.io/badge/Windows-PowerShell_5.1-2867C7?style=flat-square" alt="Windows · PowerShell 5.1"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-318E83?style=flat-square" alt="MIT 许可证"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.1.0"><img src="https://img.shields.io/badge/v0.1.0-公开预览版-526B86?style=flat-square" alt="v0.1.0 公开预览版"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml"><img src="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml/badge.svg" alt="Windows 离线测试"></a>
+</p>
 
-这是独立的社区工具，不是 OpenAI 官方产品；切换的是 **Codex** 登录与接口，不是 ChatGPT 网页或通用 ChatGPT 聊天客户端。仅支持 Windows，界面为中文。下载包不包含任何账号、API Key 或模型额度。
+<p align="center">
+  <strong>ChatGPT 账号与 Responses API，在一个窗口里管理。</strong><br>
+  切换登录和接口，继续使用同一份本地会话、项目与工作区。
+</p>
 
-[下载 ZIP](https://github.com/sheyinjue-a11y/codex-account-switcher/archive/refs/heads/main.zip) · [版本发布](https://github.com/sheyinjue-a11y/codex-account-switcher/releases)
+<p align="center">
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/archive/refs/tags/v0.1.0.zip"><strong>↓ 下载 v0.1.0</strong></a>
+  &nbsp; · &nbsp; <a href="#快速开始">快速开始</a>
+  &nbsp; · &nbsp; <a href="#界面预览">看看界面</a>
+  &nbsp; · &nbsp; <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases">更新记录</a>
+</p>
+
+> **适用范围**：Windows / 中文界面 / Codex 桌面与 CLI。独立社区工具，非 OpenAI 官方产品；不切换 ChatGPT 网页或通用聊天客户端。下载包不附带账号、Key 或额度。
+
+## 能做什么
+
+| 你要做的事 | 在切换器里 |
+| :--- | :--- |
+| 在多个 ChatGPT 账号间切换 | 浏览器登录、重复账号检测、重新登录与取消登录 |
+| 保存不同 API 服务 | 每档独立的 Base URL、Key 和默认模型 |
+| 整理账号列表 | 添加、重命名、编辑，删除非活动档 |
+| 接着处理原来的工作 | 共用本地会话、项目和工作区；云端内容随账号而定 |
+| 安全地保存和切换 | Windows DPAPI 加密副本、运行进程检查、失败回滚和中断恢复 |
+
+旧个人／实验室双档安装可迁移，原实验室路由兼容逻辑保留；新建 API 档按你填写的服务和模型工作。
+
+## 界面预览
+
+<p align="center">
+  <img src="assets/account-picker.png" alt="切换器实际界面：个人 ChatGPT 档、实验室 API 档、添加按钮、配置档管理菜单和修复入口。" width="560">
+</p>
+
+<p align="center"><sub>实际 WPF 界面，使用演示数据；不包含真实账号、服务地址或凭据。</sub></p>
 
 ## 快速开始
+
+**先准备好官方 Codex，之后只需「安装一次，双击启动」。**
 
 1. 安装官方 Codex Windows 桌面应用和 CLI，确认终端能运行 `codex.exe --version`。项目依赖 Windows PowerShell 5.1 / WPF（Windows 自带）；日常使用不需要 Python、Node.js 或开发环境。
 2. 先在 Codex 登录自己的第一个账号。工具需要 `%USERPROFILE%\.codex\auth.json` 文件登录；如果尚未生成，双击 `Login.cmd`，在浏览器完成官方登录。此操作可能替换当前登录，先关闭 Codex 并备份已有凭据。不要分享该文件。
@@ -18,18 +57,11 @@ Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览
 
 官方客户端来源见 [OpenAI Codex 仓库](https://github.com/openai/codex)；本工具不捆绑或自动安装官方客户端。
 
-## 功能
-
-- 多个 ChatGPT 浏览器 OAuth 登录，重复账号检测、重新登录和取消登录。
-- 多个 Responses API 档：名称、Base URL、Key、默认模型；编辑 Key 留空即保留。
-- 动态列表、重命名、删除非活动档；禁止删除当前档或最后一个有效档。
-- 同一 Windows 用户下用 DPAPI 加密保存每档凭据与路由。
-- 切换前检查进程，失败回滚，中断后由「重置 / 修复」恢复。
-- 保留旧个人／实验室双档迁移和原实验室路由兼容逻辑；新 API 档不会强制指定模型。
+## API 怎么填
 
 添加 API 时填写服务商提供的 **Responses API 基础地址**（不是 `/responses` 完整路径），例如 `https://api.example.com/v1`。HTTPS 为默认要求，仅本机回环测试地址允许 HTTP。不支持 Chat Completions-only 服务。模型名称由服务商决定，项目不保证任何特定模型可用。
 
-保存只进行本地格式检查；「测试连接」需要确认，可能消耗额度。切换器不会提供会员权益、共享额度或绕过服务商限制。
+编辑 API 时，Key 留空表示保留原 Key。保存只进行本地格式检查；「测试连接」需要确认，可能消耗额度。切换器不会提供会员权益、共享额度或绕过服务商限制。
 
 ## 数据与限制
 
@@ -41,11 +73,16 @@ Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览
 
 切换前必须退出所有使用共享目录的 Codex 进程；不支持不同账号并行运行。当前版本仅管理默认 `.codex`，不导入自定义 `CODEX_HOME`。首次导入支持内置 `openai` provider；已有自定义 provider 会被拒绝，不会静默重写，可先登录官方账号，再在工具中添加 API 档。
 
+当前配置档和最后一个有效配置档不能删除。「重置 / 修复」用于校验和恢复，不是清空账号或历史的出厂重置。
+
 共享的是本地历史，不保证不同账号的云端任务或云端同步互通。**切到另一 API 后，继续已有会话可能把该会话的历史发送给新服务商。** 仅使用你信任且允许接收这些内容的服务。
 
 活动 `auth.json` 仍是官方客户端需要读取的凭据文件；DPAPI 保护的是工具保存的副本，不抵御当前用户权限下的恶意程序。加密文件不应当作跨电脑可恢复的备份。详见 [安全说明](SECURITY.md)。
 
 ## 常见问题
+
+<details>
+<summary><strong>展开安装、切换与卸载排查</strong></summary>
 
 - **提示进程仍在运行**：退出桌面、终端和编辑器集成后重试。工具不会强制结束你的任务。
 - **第一次没有账号**：按快速开始完成文件登录，再点「重置 / 修复」。API-only 用户也可导入已由官方 CLI 保存的 API 登录。
@@ -54,13 +91,24 @@ Windows 上的 Codex 多账号 / Responses API 配置档切换器。支持浏览
 - **移动了解压目录**：`Start.cmd` 仍可用；删除旧快捷方式后重跑 `Setup.cmd` 生成新快捷方式。安装器不会覆盖已有同名快捷方式。
 - **如何卸载**：删除程序目录和快捷方式即可停止使用。共享 `.codex` 与账号库不会自动删除，避免误删历史。若要永久移除凭据，先确认备份和当前登录。
 
+</details>
+
 ## 验证与开发
+
+本地与 [GitHub Windows CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35187258570) 均已完成公开版回归：**12 组 PowerShell/WPF 测试**，以及本地三路由共享会话测试的 **9 次模拟请求**。测试不调用真实付费模型。
+
+<details>
+<summary><strong>查看测试命令与兼容性边界</strong></summary>
 
 运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\chatgpt-account-switch\Test-All.ps1 -SkipSharedSessions` 执行离线 PowerShell/WPF 回归。测试使用临时目录和假凭据，不切换真实账号。
 
 共享会话集成测试另需 Python 3.12+、`zstandard` 和官方 CLI：`python tools\chatgpt-account-switch\Test-SharedSessions.py`。它使用本地模拟服务，不发送真实付费请求。详见 [开发说明](CONTRIBUTING.md)。
 
 2026-09-17 已在 Windows PowerShell 5.1 / Codex CLI 0.154.0 下验证公开包：12 组 PowerShell/WPF 回归通过；三路由共享会话集成测试的 9 次本地模拟请求通过；PowerShell 语法及发布清单检查通过。真实浏览器授权、不同机器的桌面启动和真实服务连接仍需用户验收。官方客户端更新可能改变认证或配置格式；请先备份再升级。
+
+</details>
+
+当前为公开预览版。真实浏览器授权、不同机器的桌面启动和真实 API 服务仍需人工验收；首次安装和升级前请备份。
 
 ## 许可证
 

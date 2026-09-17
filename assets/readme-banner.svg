@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Account Switcher</title>
+  <desc id="desc">Switch accounts. Keep your local workspace. A Windows community utility for ChatGPT sign-ins and Responses API profiles.</desc>
+  <rect width="1280" height="340" rx="24" fill="#EDF4FC"/>
+  <path d="M830 0h450v340H740z" fill="#E1ECFA"/>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <rect x="52" y="43" width="38" height="38" rx="10" fill="#17365A"/>
+    <path d="M62 56h18l-4-4m4 4-4 4m4 9H62l4-4m-4 4 4 4" fill="none" stroke="#F8FBFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="104" y="67" fill="#17365A" font-size="15" font-weight="600" letter-spacing="2">WINDOWS / COMMUNITY TOOL</text>
+    <text x="52" y="145" fill="#17365A" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="48" font-weight="700">Codex Account</text>
+    <text x="52" y="202" fill="#2867C7" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="48" font-weight="700">Switcher</text>
+    <text x="55" y="252" fill="#17365A" font-size="25" font-weight="600">切换账号，接着做。</text>
+    <text x="55" y="288" fill="#526B86" font-size="17">多个登录与 API 配置档 · 一份本地工作区</text>
+    <g transform="translate(806 62)">
+      <rect width="350" height="62" rx="12" fill="#F8FBFF" stroke="#B7CDE8"/>
+      <circle cx="29" cy="31" r="7" fill="#2867C7"/>
+      <text x="49" y="38" fill="#17365A" font-size="20" font-weight="600">ChatGPT 登录</text>
+      <text x="290" y="36" fill="#2867C7" font-size="13" font-family="Consolas, monospace">A</text>
+      <rect y="80" width="350" height="62" rx="12" fill="#F8FBFF" stroke="#B7CDE8"/>
+      <circle cx="29" cy="111" r="7" fill="#45B1A3"/>
+      <text x="49" y="118" fill="#17365A" font-size="20" font-weight="600">Responses API</text>
+      <text x="290" y="116" fill="#318E83" font-size="13" font-family="Consolas, monospace">B</text>
+      <path d="M350 31h27v149H175v18m175-87h27" fill="none" stroke="#7598C5" stroke-width="2"/>
+      <path d="m170 193 5 5 5-5" fill="none" stroke="#7598C5" stroke-width="2" stroke-linecap="round"/>
+      <rect x="24" y="204" width="302" height="42" rx="10" fill="#17365A"/>
+      <text x="175" y="231" text-anchor="middle" fill="#F8FBFF" font-size="16">共用本地会话 · 项目 · 工作区</text>
+    </g>
+  </g>
+</svg>

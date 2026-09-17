@@ -8,6 +8,7 @@ $destination=Join-Path (Join-Path $repo 'dist') $Name
 $zip=$destination+'.zip'
 if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $zip)) { throw 'Distribution already exists; choose a new -Name. Nothing overwritten.' }
 $rootFiles=@('README.md','LICENSE','SECURITY.md','CONTRIBUTING.md','requirements-test.txt','Setup.cmd','Start.cmd','Login.cmd','.gitignore','.github/workflows/windows-tests.yml','scripts/Export-PublicRelease.ps1')
+$rootFiles+=@('assets/readme-banner.svg','assets/account-picker.png')
 $toolFiles=@(
     'AccountPicker.xaml','ProfileRegistry.ps1','ProfileManagement.ps1','ProfileDialogs.ps1',
     'Switch-ChatGPTAccount.ps1','Invoke-ChatGPTSwitch.ps1','Start-ChatGPT.ps1','Start-ChatGPT.vbs','Setup-Switcher.ps1','Complete-Install.cmd',
@@ -21,6 +22,8 @@ foreach($relative in $files) {
     $path=Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing release file: $relative" }
     if ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Release file is a link: $relative" }
+    # PNG is a reviewed, synthetic UI preview, not a text source file.
+    if ([IO.Path]::GetExtension($path) -eq '.png') { continue }
     $content=[IO.File]::ReadAllText($path)
     foreach($privatePath in @([Environment]::GetFolderPath('UserProfile'),$repo)) {
         if ($privatePath -and $content.IndexOf($privatePath,[StringComparison]::OrdinalIgnoreCase) -ge 0) { throw "Machine-specific path found in $relative" }
