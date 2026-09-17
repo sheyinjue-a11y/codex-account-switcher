@@ -11,12 +11,9 @@ jobs:
       - name: Install pinned official CLI for offline format checks
         shell: powershell
         run: |
-          $release = Invoke-RestMethod 'https://api.github.com/repos/openai/codex/releases/tags/rust-v0.154.0'
-          $asset = $release.assets | Where-Object name -eq 'codex-x86_64-pc-windows-msvc.exe.zip'
-          if (-not $asset) { throw 'Pinned official CLI asset is unavailable.' }
           $archive = Join-Path $env:RUNNER_TEMP 'codex-cli.zip'
           $install = Join-Path $env:RUNNER_TEMP 'switcher-test-cli'
-          Invoke-WebRequest $asset.browser_download_url -OutFile $archive
+          Invoke-WebRequest 'https://github.com/openai/codex/releases/download/rust-v0.154.0/codex-x86_64-pc-windows-msvc.exe.zip' -UseBasicParsing -OutFile $archive
           Expand-Archive $archive -DestinationPath $install
           $binary = Get-ChildItem $install -Recurse -Filter 'codex-x86_64-pc-windows-msvc.exe' | Select-Object -First 1
           if (-not $binary) { throw 'Official CLI executable missing.' }
