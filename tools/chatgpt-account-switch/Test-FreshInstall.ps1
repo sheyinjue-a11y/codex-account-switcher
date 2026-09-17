@@ -35,6 +35,16 @@ try {
     Write-AtomicText (Join-Path $noConfig.CanonicalHome 'auth.json') '{"auth_mode":"apikey","OPENAI_API_KEY":"FAKE_KEY_LOCAL_TEST_ONLY"}'
     $null=Initialize-MultiProfileSwitcher $noConfig
     Check ((Read-ProfileRegistry $noConfig).profiles.Count -eq 1) 'Missing optional config is created safely.'
+    $unicode=Settings (-join([char[]]@(0x7528,0x6237)))
+    Write-AtomicText (Join-Path $unicode.CanonicalHome 'auth.json') '{"auth_mode":"apikey","OPENAI_API_KEY":"FAKE_KEY_LOCAL_TEST_ONLY"}'
+    $null=Initialize-MultiProfileSwitcher $unicode
+    Check ((Read-ProfileState $unicode).sharedCodexHome -ceq $unicode.CanonicalHome) 'Non-ASCII Windows home paths survive state loading.'
+    $settingsFile=Join-Path $root 'unicode-settings.json'; Write-AtomicText $settingsFile ($unicode|ConvertTo-Json)
+    $oldMode=$env:CODEX_SWITCHER_TEST_MODE
+    try {
+        $env:CODEX_SWITCHER_TEST_MODE='1'
+        Check ((Get-SwitcherSettings $settingsFile).CanonicalHome -ceq $unicode.CanonicalHome) 'UTF-8 test settings preserve non-ASCII paths.'
+    } finally { $env:CODEX_SWITCHER_TEST_MODE=$oldMode }
     $missing=Settings 'missing'
     Reject { Initialize-MultiProfileSwitcher $missing } 'Missing login fails with no invented credentials.'
     Check (-not (Test-Path (Get-ProfileRegistryPath $missing))) 'Failed setup leaves no registry.'

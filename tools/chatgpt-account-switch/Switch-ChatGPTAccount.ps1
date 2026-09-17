@@ -56,7 +56,7 @@ function Get-SwitcherSettings {
             throw 'Test settings are accepted only when CODEX_SWITCHER_TEST_MODE=1.'
         }
 
-        $testConfig = Get-Content -LiteralPath $TestSettingsPath -Raw | ConvertFrom-Json
+        $testConfig = Get-Content -LiteralPath $TestSettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
         $required = @('TestRoot', 'CanonicalHome', 'LabHome', 'ShareHome', 'VaultRoot', 'BackupRoot')
         foreach ($name in $required) {
             if (-not ($testConfig.PSObject.Properties.Name -contains $name) -or
@@ -322,7 +322,7 @@ function Read-SwitcherState {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         return $null
     }
-    return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    return Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
 function Get-SwitchRecoveryPath {
