@@ -13,7 +13,8 @@ jobs:
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'codex-cli.zip'
           $install = Join-Path $env:RUNNER_TEMP 'switcher-test-cli'
-          Invoke-WebRequest 'https://github.com/openai/codex/releases/download/rust-v0.154.0/codex-x86_64-pc-windows-msvc.exe.zip' -UseBasicParsing -OutFile $archive
+          curl.exe --fail --location --retry 3 --output $archive 'https://github.com/openai/codex/releases/download/rust-v0.154.0/codex-x86_64-pc-windows-msvc.exe.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'Official CLI download failed.' }
           Expand-Archive $archive -DestinationPath $install
           $binary = Get-ChildItem $install -Recurse -Filter 'codex-x86_64-pc-windows-msvc.exe' | Select-Object -First 1
           if (-not $binary) { throw 'Official CLI executable missing.' }

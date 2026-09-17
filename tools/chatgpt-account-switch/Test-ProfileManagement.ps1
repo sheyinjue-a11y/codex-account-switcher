@@ -58,6 +58,9 @@ try {
         $process.StandardInput.BaseStream.Write($payload,0,$payload.Length); $process.StandardInput.Close()
         Check ($process.WaitForExit(15000)) 'Actual management runner terminates.'
         $resultText=[IO.File]::ReadAllText($resultFile)
+        if ($process.ExitCode -ne 0 -or -not ($resultText|ConvertFrom-Json).success) {
+            Write-Host ('Runner diagnostic (sanitized): '+[string]($resultText|ConvertFrom-Json).message)
+        }
         Check ($process.ExitCode -eq 0 -and ($resultText|ConvertFrom-Json).success) 'UI runner and real core management protocol integrate.'
         Check (-not $resultText.Contains('FAKE_RUNNER_SECRET_LOCAL_TEST_ONLY')) 'Actual core runner result contains no secret.'
         Check (@((Read-ProfileRegistry $s).profiles|Where-Object displayName -eq $name).Count -eq 1) 'Actual core stdin preserves Unicode profile names.'
