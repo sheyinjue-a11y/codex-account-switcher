@@ -52,7 +52,11 @@ final class MacRuntime {
             throw SwitcherError.message("检测到自定义 CODEX_HOME。本版只管理 ~/.codex，未修改自定义目录。")
         }
         // Finder launches inherit launchd, not the user's interactive shell config.
-        for name in ["CODEX_HOME", "OPENAI_BASE_URL", "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_PROFILE", "CODEX_ACCESS_TOKEN", "CODEX_AUTH_JSON"] {
+        for name in ["CODEX_HOME", "CODEX_SQLITE_HOME", "OPENAI_BASE_URL", "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_PROFILE", "CODEX_ACCESS_TOKEN", "CODEX_AUTH_JSON"] {
+            let inherited = ProcessInfo.processInfo.environment[name] ?? ""
+            if !inherited.isEmpty && !(name == "CODEX_HOME" && inherited == home.path) {
+                throw SwitcherError.message("切换器启动环境有 \(name) 覆盖。请移除该覆盖后重开工具；未修改系统环境。")
+            }
             let result = try capture("/bin/launchctl", ["getenv", name])
             let value = result.trimmingCharacters(in: .whitespacesAndNewlines)
             if !value.isEmpty && !(name == "CODEX_HOME" && value == home.path) {

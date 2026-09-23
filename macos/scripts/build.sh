@@ -20,7 +20,7 @@ cp LICENSE "$app/Contents/Resources/LICENSE"
 plutil -lint "$app/Contents/Info.plist"
 codesign --force --sign - --identifier io.github.sheyinjue-a11y.codex-account-switcher "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
-lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/CodexAccountSwitcher"
+lipo "$app/Contents/MacOS/CodexAccountSwitcher" -verify_arch arm64 x86_64
 "$app/Contents/MacOS/CodexAccountSwitcher" --render-preview "$output/macos-preview.png"
 cp macos/README.md "$output/请先阅读.md"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$output/Codex-Account-Switcher-macOS-universal.zip"
