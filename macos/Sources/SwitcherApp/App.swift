@@ -40,7 +40,7 @@ enum Theme {
             return
         }
         let vault = Vault(root: root, keyProvider: { [root] in
-            let existing = FileManager.default.fileExists(atPath: root.appendingPathComponent("profiles.enc").path) || FileManager.default.fileExists(atPath: root.appendingPathComponent("pending.enc").path)
+            let existing = ["profiles.enc", "pending.enc", "first-login-backup.enc"].contains { FileManager.default.fileExists(atPath: root.appendingPathComponent($0).path) }
             return try KeychainKey.loadOrCreate(allowCreate: !existing)
         })
         engine = SwitcherEngine(home: home, vault: vault, quiescent: { [home] in

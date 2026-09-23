@@ -5,7 +5,9 @@ import Darwin
 
 public enum PrivateFiles {
     public static func check(_ url: URL) throws {
-        let path = url.standardizedFileURL.path
+        // NSURL standardization may shorten /private/var back to the /var
+        // symlink on macOS. Inspect the supplied physical path, not that alias.
+        let path = url.path
         var cursor = URL(fileURLWithPath: "/", isDirectory: true)
         for part in path.split(separator: "/") {
             cursor.appendPathComponent(String(part))

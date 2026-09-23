@@ -1,5 +1,6 @@
 import XCTest
 import CryptoKit
+import Darwin
 @testable import SwitcherCore
 
 final class EngineTests: XCTestCase {
@@ -7,13 +8,17 @@ final class EngineTests: XCTestCase {
     let key = SymmetricKey(size: .bits256)
     override func setUpWithError() throws {
         // Resolve /var -> /private/var before testing strict path checks.
-        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
+        guard let physical = realpath(FileManager.default.temporaryDirectory.path, nil) else { throw SwitcherError.message("Test temp directory unavailable") }
+        defer { free(physical) }
+        root = URL(fileURLWithPath: String(cString: physical)).appendingPathComponent(UUID().uuidString)
         home = root.appendingPathComponent("用户/.codex")
         try PrivateFiles.directory(home)
         vault = Vault(root: root.appendingPathComponent("vault"), keyProvider: { self.key })
         engine = SwitcherEngine(home: home, vault: vault, quiescent: {})
     }
-    override func tearDownWithError() throws { try FileManager.default.removeItem(at: root) }
+    override func tearDownWithError() throws {
+        if let root, FileManager.default.fileExists(atPath: root.path) { try FileManager.default.removeItem(at: root) }
+    }
     func auth(_ account: String, token: String = "FAKE_TEST_ONLY") throws -> Data {
         try JSONSerialization.data(withJSONObject: ["auth_mode": "chatgpt", "tokens": ["account_id": account, "access_token": token, "refresh_token": "FAKE_REFRESH", "id_token": "FAKE_ID"]])
     }

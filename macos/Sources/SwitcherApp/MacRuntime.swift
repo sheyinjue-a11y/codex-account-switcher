@@ -17,6 +17,7 @@ final class MacRuntime {
         guard url.pathExtension == "app", url.lastPathComponent != "Codex Account Switcher.app",
               let bundle = Bundle(url: url), let exe = bundle.executableURL,
               let id = bundle.bundleIdentifier, id.lowercased().contains("codex"),
+              id != "io.github.sheyinjue-a11y.codex-account-switcher",
               FileManager.default.isExecutableFile(atPath: exe.path) else { return false }
         return true
     }
