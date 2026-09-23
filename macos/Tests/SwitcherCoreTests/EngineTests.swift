@@ -125,7 +125,7 @@ final class EngineTests: XCTestCase {
     func testLockAndSymlinkGuards() throws {
         _ = try seed()
         let lock = try OperationLock(directory: vault.root)
-        withExtendedLifetime(lock) { XCTAssertThrowsError(try engine.status()) }
+        try withExtendedLifetime(lock) { XCTAssertThrowsError(try engine.status()) }
         let link = root.appendingPathComponent("link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: home)
         XCTAssertThrowsError(try PrivateFiles.read(link.appendingPathComponent("auth.json")))
