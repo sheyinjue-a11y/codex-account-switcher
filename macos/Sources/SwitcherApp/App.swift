@@ -321,11 +321,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "--render-preview"), args.count > index + 1 {
-            let renderer = ImageRenderer(content: PickerView(model: SwitcherApplication.sharedModel).frame(width: 660, height: 650))
-            renderer.scale = 2
-            guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) else { exit(1) }
-            do { try png.write(to: URL(fileURLWithPath: args[index + 1])); exit(0) } catch { exit(1) }
+            // ImageRenderer cannot draw AppKit-backed Menu/ScrollView controls.
+            // Host the real view in a native window and capture its display instead.
+            let view = NSHostingView(rootView: PickerView(model: SwitcherApplication.sharedModel).frame(width: 660, height: 650))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 650), styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = view
+            window.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                view.layoutSubtreeIfNeeded(); window.displayIfNeeded()
+                guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { exit(1) }
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                guard let png = bitmap.representation(using: .png, properties: [:]) else { exit(1) }
+                do { try png.write(to: URL(fileURLWithPath: args[index + 1])); exit(0) } catch { exit(1) }
+            }
         }
     }
 }
