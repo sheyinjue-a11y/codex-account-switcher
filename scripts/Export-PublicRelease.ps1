@@ -8,7 +8,7 @@ $destination=Join-Path (Join-Path $repo 'dist') $Name
 $zip=$destination+'.zip'
 if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $zip)) { throw 'Distribution already exists; choose a new -Name. Nothing overwritten.' }
 $rootFiles=@('README.md','LICENSE','SECURITY.md','CONTRIBUTING.md','requirements-test.txt','Setup.cmd','Start.cmd','Login.cmd','.gitignore','.github/workflows/windows-tests.yml','scripts/Export-PublicRelease.ps1')
-$rootFiles+=@('assets/readme-banner.svg','assets/account-picker.png')
+$rootFiles+=@('assets/readme-banner.svg','assets/account-picker.png','assets/macos-picker.png')
 $rootFiles+=@('.gitattributes','.github/workflows/macos.yml','macos/Package.swift','macos/Info.plist','macos/README.md','macos/scripts/build.sh',
     'macos/Sources/SwitcherCore/Config.swift','macos/Sources/SwitcherCore/Models.swift','macos/Sources/SwitcherCore/Storage.swift','macos/Sources/SwitcherCore/Engine.swift',
     'macos/Sources/SwitcherApp/App.swift','macos/Sources/SwitcherApp/MacRuntime.swift',

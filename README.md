@@ -38,6 +38,16 @@
 
 ## 界面预览
 
+### macOS · 原生 SwiftUI
+
+<p align="center">
+  <img src="assets/macos-picker.png" alt="macOS 原生切换器：个人账号、实验室 API、导入当前登录和添加入口。" width="560">
+</p>
+
+<p align="center"><sub>由 Mac runner 运行原生窗口生成，使用演示数据；非网页或 CLI 截图。</sub></p>
+
+### Windows · WPF
+
 <p align="center">
   <img src="assets/account-picker.png" alt="切换器实际界面：个人 ChatGPT 档、实验室 API 档、添加按钮、配置档管理菜单和修复入口。" width="560">
 </p>
@@ -130,7 +140,7 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 
 当前为公开预览版。真实浏览器授权、不同机器的桌面启动和真实 API 服务仍需人工验收；首次安装和升级前请备份。
 
-macOS 的隔离 Swift 测试、双架构应用构建和演示界面渲染见 [Mac CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/macos.yml)。测试不读取真实凭据、不请求付费模型；编译通过不代表真实账号端到端验收。
+2026-09-23 [Mac CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35837051191) 已通过 **16 项 Swift 测试、9 次本地模拟共享会话请求、arm64/x86_64 双架构构建、签名/包检查及原生窗口渲染**；[Windows 回归](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35837051294) 同时通过。测试不读取真实凭据、不请求付费模型；编译通过不代表真实账号端到端验收。
 
 ## 许可证
 
