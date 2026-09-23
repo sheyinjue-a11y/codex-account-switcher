@@ -138,6 +138,11 @@ final class EngineTests: XCTestCase {
         try FileManager.default.linkItem(at: home.appendingPathComponent("auth.json"), to: hardlink)
         XCTAssertThrowsError(try PrivateFiles.read(hardlink))
     }
+    func testSpecialFilesAreRejectedWithoutBlocking() throws {
+        let fifo = root.appendingPathComponent("named-pipe")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        XCTAssertThrowsError(try PrivateFiles.read(fifo))
+    }
     func testFirstProfileCanActivateWithoutExistingAuth() throws {
         try engine.addChatGPT(name: "first", auth: auth("one"))
         let id = try engine.status().profiles[0].id

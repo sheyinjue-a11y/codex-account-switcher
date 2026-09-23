@@ -141,7 +141,7 @@ final class MacRuntime {
             if output.count > 32768 { output = output.suffix(32768) }
             let text = String(data: output, encoding: .utf8) ?? ""
             outputLock.unlock()
-            if let range = text.range(of: #"https://auth\.openai\.com/[^\s\u{001B}]+"#, options: .regularExpression), let url = URL(string: String(text[range])) {
+            if let range = text.range(of: #"https://auth\.openai\.com/[^\s\x1B]+"#, options: .regularExpression), let url = URL(string: String(text[range])) {
                 self?.gate.lock(); self?.loginLink = url; self?.gate.unlock()
             }
         }

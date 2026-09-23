@@ -29,7 +29,7 @@ public enum PrivateFiles {
     }
     public static func read(_ url: URL) throws -> Data? {
         try check(url)
-        let fd = open(url.path, O_RDONLY | O_NOFOLLOW)
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
         if fd < 0 {
             if errno == ENOENT { return nil }
             throw SwitcherError.message("无法读取本地文件。")
@@ -71,10 +71,10 @@ public final class OperationLock {
         try PrivateFiles.directory(directory)
         let url = directory.appendingPathComponent("operation.lock")
         try PrivateFiles.check(url)
-        fd = open(url.path, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)
+        fd = open(url.path, O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0o600)
         guard fd >= 0 else { throw SwitcherError.message("无法建立账号库锁。") }
         var info = stat()
-        guard fstat(fd, &info) == 0, info.st_nlink == 1, info.st_uid == getuid(),
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1, info.st_uid == getuid(),
               flock(fd, LOCK_EX | LOCK_NB) == 0 else {
             close(fd); fd = -1
             throw SwitcherError.message("另一个切换器正在操作，请稍后重试。")
