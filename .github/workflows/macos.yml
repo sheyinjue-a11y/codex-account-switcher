@@ -14,6 +14,18 @@ jobs:
       - name: Test isolated core
         working-directory: macos
         run: swift test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify shared sessions against official CLI using loopback only
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt
+          case "$(uname -m)" in arm64) target=aarch64-apple-darwin;; *) target=x86_64-apple-darwin;; esac
+          curl --fail --location --retry 3 "https://github.com/openai/codex/releases/download/rust-v0.154.0/codex-$target.tar.gz" -o "$RUNNER_TEMP/codex.tar.gz"
+          mkdir -p "$RUNNER_TEMP/test-codex"
+          tar -xzf "$RUNNER_TEMP/codex.tar.gz" -C "$RUNNER_TEMP/test-codex"
+          python tools/chatgpt-account-switch/Test-SharedSessions.py --codex "$RUNNER_TEMP/test-codex/codex-$target"
       - name: Build universal app and render synthetic preview
         run: bash macos/scripts/build.sh
       - uses: actions/upload-artifact@v4

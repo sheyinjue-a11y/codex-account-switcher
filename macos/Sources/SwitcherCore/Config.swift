@@ -45,7 +45,7 @@ public enum ConfigEditor {
                 }
                 guard values[key] == nil else { throw SwitcherError.message("配置根项重复；请先修复 config.toml。") }
                 values[key] = value
-                if key == "profile" || key == "forced_chatgpt_workspace_id" || key == "chatgpt_base_url" {
+                if key == "profile" || key == "forced_login_method" || key == "forced_chatgpt_workspace_id" || key == "chatgpt_base_url" {
                     throw SwitcherError.message("当前配置含 profile 或账号限制/登录地址覆盖，不能安全切换。")
                 }
                 if managed.contains(key) { route.append(original); continue }

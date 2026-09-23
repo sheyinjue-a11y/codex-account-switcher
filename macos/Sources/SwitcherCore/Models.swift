@@ -75,6 +75,14 @@ public struct Registry: Codable {
               activeID == nil || profiles.contains(where: { $0.id == activeID }) else {
             throw SwitcherError.message("账号库格式无效或版本不支持；请保留原文件。")
         }
-        for profile in profiles { try profile.validate() }
+        var identities = Set<String>()
+        for profile in profiles {
+            try profile.validate()
+            let credential = try Credential(profile.auth)
+            let route = credential.kind == .chatgpt ? "" : (try ConfigEditor.endpoint(profile.route) ?? "")
+            guard identities.insert(credential.identity + ":" + route).inserted else {
+                throw SwitcherError.message("同一账号或同一 API 地址/Key 已存在，未重复保存。")
+            }
+        }
     }
 }

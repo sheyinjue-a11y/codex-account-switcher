@@ -4,8 +4,9 @@
 
 <p align="center">
   <a href="#快速开始"><img src="https://img.shields.io/badge/Windows-PowerShell_5.1-2867C7?style=flat-square" alt="Windows · PowerShell 5.1"></a>
+  <a href="macos/README.md"><img src="https://img.shields.io/badge/macOS-Native_SwiftUI-318E83?style=flat-square" alt="macOS · 原生 SwiftUI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-318E83?style=flat-square" alt="MIT 许可证"></a>
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.1.0"><img src="https://img.shields.io/badge/v0.1.0-公开预览版-526B86?style=flat-square" alt="v0.1.0 公开预览版"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/v0.2.0-公开预览版-526B86?style=flat-square" alt="v0.2.0 公开预览版"></a>
   <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml"><img src="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml/badge.svg" alt="Windows 离线测试"></a>
 </p>
 
@@ -15,13 +16,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/archive/refs/tags/v0.1.0.zip"><strong>↓ 下载 v0.1.0</strong></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.2.0"><strong>↓ 下载 Windows / macOS</strong></a>
   &nbsp; · &nbsp; <a href="#快速开始">快速开始</a>
   &nbsp; · &nbsp; <a href="#界面预览">看看界面</a>
   &nbsp; · &nbsp; <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases">更新记录</a>
 </p>
 
-> **适用范围**：Windows / 中文界面 / Codex 桌面与 CLI。独立社区工具，非 OpenAI 官方产品；不切换 ChatGPT 网页或通用聊天客户端。下载包不附带账号、Key 或额度。
+> **适用范围**：Windows 与 macOS / 中文图形界面 / 官方 Codex 桌面账号切换。独立社区工具，非 OpenAI 官方产品；不切换 ChatGPT 网页或通用聊天客户端。下载包不附带账号、Key 或额度。
 
 ## 能做什么
 
@@ -31,7 +32,7 @@
 | 保存不同 API 服务 | 每档独立的 Base URL、Key 和默认模型 |
 | 整理账号列表 | 添加、重命名、编辑，删除非活动档 |
 | 接着处理原来的工作 | 共用本地会话、项目和工作区；云端内容随账号而定 |
-| 安全地保存和切换 | Windows DPAPI 加密副本、运行进程检查、失败回滚和中断恢复 |
+| 安全地保存和切换 | Windows DPAPI；macOS 钥匙串密钥 + AES-GCM；进程检查、失败回滚和中断恢复 |
 
 旧个人／实验室双档安装可迁移，原实验室路由兼容逻辑保留；新建 API 档按你填写的服务和模型工作。
 
@@ -44,6 +45,19 @@
 <p align="center"><sub>实际 WPF 界面，使用演示数据；不包含真实账号、服务地址或凭据。</sub></p>
 
 ## 快速开始
+
+| 系统 | 下载与入口 |
+| --- | --- |
+| **macOS** | Release 中的 `Codex-Account-Switcher-macOS-universal.zip`，解压后把 `.app` 拖进「应用程序」，双击使用。[Mac 安装说明](macos/README.md) |
+| **Windows** | Release 中的 `Codex-Account-Switcher-Windows.zip`，完整解压，按下方步骤操作。 |
+
+### macOS
+
+先备份 `~/.codex`，安装官方 Codex.app，再打开切换器。用「导入当前登录」或「＋ 添加 → ChatGPT 账号」建立账号库，也可添加 Responses API；点击配置档，确认后正常退出并重开 Codex。日常操作不需要终端。
+
+Mac 工具为 macOS 13+ Universal 应用；官方 Codex 的系统和芯片要求仍以官方为准。**当前仅 ad-hoc 签名、未经 Apple 公证**，首次打开可能被系统拦截。核验来源后，由用户本人决定是否允许；不要关闭 Gatekeeper。真实 Mac 登录、桌面账号切换和历史显示仍需人工验收。[完整限制与恢复方法](macos/README.md)
+
+### Windows
 
 **先准备好官方 Codex，之后只需「安装一次，双击启动」。**
 
@@ -63,6 +77,8 @@
 
 编辑 API 时，Key 留空表示保留原 Key。保存只进行本地格式检查；「测试连接」需要确认，可能消耗额度。切换器不会提供会员权益、共享额度或绕过服务商限制。
 
+macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」按钮；Windows 版保留原功能。
+
 ## 数据与限制
 
 | 内容 | 位置 |
@@ -70,6 +86,10 @@
 | 共享会话、项目与活动登录 | `%USERPROFILE%\.codex` |
 | 加密账号库与恢复记录 | `%LOCALAPPDATA%\CodexAccountSwitcher` |
 | 程序 | 当前解压目录 |
+
+上表为 Windows 路径。macOS 共享目录是 `~/.codex`，加密账号库在 `~/Library/Application Support/CodexAccountSwitcher`，密钥在本机登录钥匙串。两端加密库不互通，不提供跨电脑凭据迁移。
+
+两端都不按账号分离本地会话、项目、skills、插件、MCP 和工作区。账号切换只更新认证及必要路由；**共享本地数据不等于云端内容跨账号互通**。macOS 对复杂根配置、自定义 provider、配置 profile 和自定义 `CODEX_HOME` 会拒绝修改，详见 Mac 说明。
 
 切换前必须退出所有使用共享目录的 Codex 进程；不支持不同账号并行运行。当前版本仅管理默认 `.codex`，不导入自定义 `CODEX_HOME`。首次导入支持内置 `openai` provider；已有自定义 provider 会被拒绝，不会静默重写，可先登录官方账号，再在工具中添加 API 档。
 
@@ -109,6 +129,8 @@
 </details>
 
 当前为公开预览版。真实浏览器授权、不同机器的桌面启动和真实 API 服务仍需人工验收；首次安装和升级前请备份。
+
+macOS 的隔离 Swift 测试、双架构应用构建和演示界面渲染见 [Mac CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/macos.yml)。测试不读取真实凭据、不请求付费模型；编译通过不代表真实账号端到端验收。
 
 ## 许可证
 

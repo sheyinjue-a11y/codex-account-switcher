@@ -17,6 +17,7 @@ import stat
 import argparse
 import base64
 import gzip
+import signal
 import zstandard
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -73,7 +74,8 @@ class AppServer:
             [args.codex, "app-server", "--stdio"],
             cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            start_new_session=os.name != "nt",
         )
         self.messages = queue.Queue()
         self.errors = []
@@ -110,9 +112,16 @@ class AppServer:
 
     def close(self):
         # Also stop helper processes created by this isolated server.
-        subprocess.run(["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            # This process group is created solely by this isolated test.
+            try:
+                os.killpg(self.process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
         self.process.wait(timeout=10)
 
 

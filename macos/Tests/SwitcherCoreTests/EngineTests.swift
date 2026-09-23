@@ -139,4 +139,18 @@ final class EngineTests: XCTestCase {
         try engine.activate(id)
         XCTAssertEqual(try engine.status().activeID, id)
     }
+    func testKeyringTakeoverRequiresExplicitConsentAndKeepsBackup() throws {
+        let stale = try auth("old")
+        try PrivateFiles.write(stale, to: home.appendingPathComponent("auth.json"))
+        let config = Data("cli_auth_credentials_store = \"auto\"\n[features]\nplugins = true\n".utf8)
+        try PrivateFiles.write(config, to: home.appendingPathComponent("config.toml"))
+        try engine.addChatGPT(name: "new", auth: auth("new"))
+        let id = try engine.status().profiles[0].id
+        XCTAssertThrowsError(try engine.activate(id))
+        try engine.activate(id, replacingUnmanagedLogin: true)
+        let backup = try vault.load(Journal.self, name: "first-login-backup.enc")
+        XCTAssertEqual(backup?.oldAuth, stale)
+        XCTAssertEqual(backup?.oldConfig, config)
+        XCTAssertEqual(try engine.status().activeID, id)
+    }
 }

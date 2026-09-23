@@ -95,6 +95,7 @@ public final class SwitcherEngine {
                 throw SwitcherError.message("这个 ChatGPT 账号已在列表中。请用无痕窗口登录另一个账号。")
             }
             if let id {
+                if registry.activeID != nil { try syncCurrent(&registry) }
                 guard let index = registry.profiles.firstIndex(where: { $0.id == id }), registry.profiles[index].kind == .chatgpt,
                       try Credential(registry.profiles[index].auth).identity == identity else {
                     throw SwitcherError.message("重新登录的账号与原账号不一致；未覆盖。")
@@ -143,17 +144,23 @@ public final class SwitcherEngine {
             try vault.save(registry, name: "profiles.enc")
         }
     }
-    public func activate(_ id: UUID) throws {
+    public func activate(_ id: UUID, replacingUnmanagedLogin: Bool = false) throws {
         try locked {
             try noPending(); try quiescent()
             try PrivateFiles.directory(home)
             var registry = try readRegistry()
-            try syncCurrent(&registry)
+            let firstTakeover = registry.activeID == nil && replacingUnmanagedLogin
+            if !firstTakeover { try syncCurrent(&registry) }
             guard let target = registry.profiles.first(where: { $0.id == id }) else { throw SwitcherError.message("配置档不存在。") }
             try target.validate()
             let oldAuth = try PrivateFiles.read(authURL), oldConfig = try PrivateFiles.read(configURL)
             let newConfig = Data(try ConfigEditor.applying(target.route, to: configText(oldConfig)).utf8)
             let journal = Journal(previous: registry, oldAuth: oldAuth, oldConfig: oldConfig, newAuth: target.auth, newConfig: newConfig)
+            // Explicit first-use takeover can replace a stale file while Codex used
+            // Keychain/auto. Keep the original file/config encrypted, even on success.
+            if firstTakeover, try PrivateFiles.read(vault.root.appendingPathComponent("first-login-backup.enc")) == nil {
+                try vault.save(journal, name: "first-login-backup.enc")
+            }
             try vault.save(journal, name: "pending.enc")
             do {
                 // Check again immediately before writing, after any Keychain prompt.

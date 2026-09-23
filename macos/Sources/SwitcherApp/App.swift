@@ -72,13 +72,15 @@ enum Theme {
     func activate(_ profile: Profile) {
         guard !busy, let engine, !preview else { return }
         let warning = profile.kind == .responsesAPI ? "继续已有会话可能将历史发送给这个 API 服务商。仅使用可信服务。\n\n" : ""
-        guard confirm("切换到「\(profile.name)」？", warning + "请先结束任务。工具会正常退出并重开 Codex；不会强制结束 CLI 或编辑器任务。本地历史、项目及工作区仍然共用。", action: "切换并打开") else { return }
+        let takeover = activeID == nil
+        let firstUse = takeover ? "首次启用会改用 file 登录并替换现有 auth.json；旧文件和配置会加密备份，官方钥匙串不改动。\n\n" : ""
+        guard confirm("切换到「\(profile.name)」？", warning + firstUse + "请先结束任务。工具会正常退出并重开 Codex；不会强制结束 CLI 或编辑器任务。本地历史、项目及工作区仍然共用。", action: "切换并打开") else { return }
         busy = true; errorText = ""; message = "正在退出 Codex…"
         Task {
             do {
                 try await runtime.quitDesktop()
                 message = "正在切换账号…"
-                try await Task.detached { try engine.activate(profile.id) }.value
+                try await Task.detached { try engine.activate(profile.id, replacingUnmanagedLogin: takeover) }.value
                 reload(); message = "账号已切换，正在打开 Codex…"
                 try await runtime.openDesktop()
                 message = "已切换到「\(profile.name)」。"
