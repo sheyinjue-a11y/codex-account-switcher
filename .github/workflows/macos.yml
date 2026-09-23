@@ -14,3 +14,14 @@ jobs:
       - name: Test isolated core
         working-directory: macos
         run: swift test
+      - name: Build universal app and render synthetic preview
+        run: bash macos/scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-universal
+          path: |
+            dist/macos/Codex-Account-Switcher-macOS-universal.zip
+            dist/macos/SHA256SUMS.txt
+            dist/macos/macos-preview.png
+            dist/macos/请先阅读.md
+          if-no-files-found: error
