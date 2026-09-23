@@ -25,3 +25,9 @@ __pycache__/
 # Publication snapshots and distribution packages
 dist/
 *.zip
+
+# macOS build outputs (never include account data)
+.DS_Store
+macos/.build/
+macos/.swiftpm/
+*.app/

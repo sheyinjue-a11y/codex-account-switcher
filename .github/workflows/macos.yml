@@ -1,0 +1,16 @@
+name: macOS tests and app
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated core
+        working-directory: macos
+        run: swift test
