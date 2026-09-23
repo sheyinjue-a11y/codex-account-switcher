@@ -56,7 +56,7 @@ public struct Profile: Codable, Identifiable {
         _ = try Self.validName(name)
         guard try Credential(auth).kind == kind else { throw SwitcherError.message("账号类型不匹配。") }
         _ = try ConfigEditor.applying(route, to: "")
-        if kind == .chatgpt && (try ConfigEditor.endpoint(route)) != nil {
+        if kind == .chatgpt, try ConfigEditor.endpoint(route) != nil {
             throw SwitcherError.message("ChatGPT 登录不能发送到自定义 API 地址。")
         }
         if kind == .responsesAPI, let endpoint = try ConfigEditor.endpoint(route) {

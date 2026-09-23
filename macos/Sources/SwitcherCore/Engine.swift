@@ -45,7 +45,8 @@ public final class SwitcherEngine {
     private func sameAccount(_ profile: Profile, auth: Data, route: Route) throws -> Bool {
         let current = try Credential(auth), saved = try Credential(profile.auth)
         guard current.kind == profile.kind, current.identity == saved.identity else { return false }
-        return current.kind == .chatgpt || (try ConfigEditor.endpoint(route)) == (try ConfigEditor.endpoint(profile.route))
+        if current.kind == .chatgpt { return true }
+        return try ConfigEditor.endpoint(route) == ConfigEditor.endpoint(profile.route)
     }
     private func syncCurrent(_ registry: inout Registry) throws {
         guard let auth = try PrivateFiles.read(authURL) else {
