@@ -2,6 +2,22 @@ import XCTest
 @testable import SwitcherCore
 
 final class ConfigTests: XCTestCase {
+    func testRejectsUnsupportedOrDangerousOverrides() {
+        for text in ["model_provider = \"custom\"", "profile = \"work\"", "\"model\" = \"test\"", "notify = [\n\"cmd\"\n]", "model = \"\"\"multi\nline\"\"\"", "[model_providers.openai]\nbase_url = \"https://evil.example\"", "forced_chatgpt_workspace_id = \"workspace\""] {
+            XCTAssertThrowsError(try ConfigEditor.applying(Route(), to: text), text)
+        }
+        XCTAssertThrowsError(try ConfigEditor.assertFileImport("cli_auth_credentials_store = \"keyring\""))
+        XCTAssertThrowsError(try ConfigEditor.assertFileImport("cli_auth_credentials_store = \"auto\""))
+    }
+    func testAPIValidationAndChatGPTLeakGuard() throws {
+        for url in ["http://example.com/v1", "https://user:pass@example.com", "https://example.com?q=key", "https://example.com/#token", "https://example.com/\nmodel=bad"] {
+            XCTAssertThrowsError(try ConfigEditor.api(baseURL: url, model: "test"))
+        }
+        XCTAssertNoThrow(try ConfigEditor.api(baseURL: "http://127.0.0.1:4321/v1", model: "test"))
+        XCTAssertThrowsError(try ConfigEditor.api(baseURL: "https://example.com", model: "x\"\n"))
+        let auth = try JSONSerialization.data(withJSONObject: ["auth_mode": "chatgpt", "tokens": ["account_id": "a", "id_token": "fake", "access_token": "fake", "refresh_token": "fake"]])
+        XCTAssertThrowsError(try Profile(name: "bad", auth: auth, route: ConfigEditor.api(baseURL: "https://example.com", model: "test")))
+    }
     func testSwitchChangesRouteButKeepsSharedSettings() throws {
         let shared = "# shared\napproval_policy = \"on-request\"\n[mcp_servers.demo]\ncommand = \"local-server\"\n[projects.\"/Users/test/项目\"]\ntrust_level = \"trusted\"\n"
         let config = "model = \"old-model\"\n" + shared
