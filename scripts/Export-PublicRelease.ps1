@@ -16,7 +16,7 @@ $rootFiles+=@('.gitattributes','.github/workflows/macos.yml','macos/Package.swif
 $toolFiles=@(
     'AccountPicker.xaml','ProfileRegistry.ps1','ProfileManagement.ps1','ProfileDialogs.ps1',
     'Switch-ChatGPTAccount.ps1','Invoke-ChatGPTSwitch.ps1','Start-ChatGPT.ps1','Start-ChatGPT.vbs','Setup-Switcher.ps1','Complete-Install.cmd',
-    'Test-All.ps1','Test-FreshInstall.ps1','Test-ProfileRegistry.ps1','Test-MultiProfileMigration.ps1','Test-ProfileManagement.ps1',
+    'Test-All.ps1','Test-FreshInstall.ps1','Test-ProfileRegistry.ps1','Test-MultiProfileMigration.ps1','Test-ProfileManagement.ps1','Test-ModelCatalog.ps1',
     'Test-IdentityDrift.ps1','Test-ChatGPTEnrollment.ps1','Test-PickerRunner.ps1','Test-AccountPicker.ps1','Test-AccountPickerDescendant.ps1',
     'Test-AccountSwitcher.ps1','Test-ProviderSwitcher.ps1','Test-Recovery.ps1','Test-MultiProfileRecovery.ps1','Test-SharedSessions.py'
 )

@@ -115,6 +115,76 @@ final class EngineTests: XCTestCase {
         XCTAssertThrowsError(try engine.saveAPI(name: "API", baseURL: "https://example.org/v1", model: "test", key: "", replacing: api.id))
         try engine.activate(ids.0)
     }
+    func catalogFixture(_ names: [String] = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "hidden-model"]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["models": names.map {
+            ["slug": $0, "visibility": $0 == "hidden-model" ? "hide" : "list", "supported_in_api": true,
+             "base_instructions": "FAKE instructions", "extra": ["nested": ["keep", "metadata"]]] as [String: Any]
+        }, "client_version": "fixture"])
+    }
+    func testAPICatalogRefreshPreservesModelsMetadataAndSharedData() throws {
+        let ids = try seed(), cache = home.appendingPathComponent("models_cache.json")
+        let snapshot = vault.root.appendingPathComponent("api-models.json")
+        let original = try catalogFixture()
+        try PrivateFiles.write(original, to: cache)
+        try engine.saveAPI(name: "API", baseURL: "https://example.test/v1", model: "gpt-6-luna", key: "FAKE_KEY")
+        let api = try engine.status().profiles.last!
+        try engine.activate(api.id)
+        let config = try String(contentsOf: home.appendingPathComponent("config.toml"), encoding: .utf8)
+        XCTAssertTrue(config.contains("model_catalog_json = "))
+        XCTAssertTrue(config.contains("model = \"gpt-6-luna\""))
+        XCTAssertTrue(config.contains("# shared\n[features]\nplugins = true"))
+        let catalog = try XCTUnwrap(PrivateFiles.read(snapshot))
+        let models = try XCTUnwrap((JSONSerialization.jsonObject(with: catalog) as? [String: Any])?["models"] as? [[String: Any]])
+        XCTAssertEqual(models.compactMap { $0["slug"] as? String }, ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "hidden-model"])
+        XCTAssertEqual(models[3]["visibility"] as? String, "hide")
+        XCTAssertEqual(models[1]["base_instructions"] as? String, "FAKE instructions")
+        XCTAssertEqual(models[1]["extra"] as? [String: [String]], ["nested": ["keep", "metadata"]])
+        XCTAssertEqual(try PrivateFiles.read(cache), original)
+        for invalid in ["{broken", "{\"models\":[]}"] {
+            try PrivateFiles.write(Data(invalid.utf8), to: cache)
+            try engine.activate(api.id)
+            XCTAssertEqual(try PrivateFiles.read(snapshot), catalog)
+        }
+        try PrivateFiles.write(catalogFixture(["future-model"]), to: cache)
+        try engine.activate(api.id)
+        XCTAssertTrue(try String(contentsOf: snapshot, encoding: .utf8).contains("future-model"))
+        try engine.activate(ids.0)
+        XCTAssertFalse(try String(contentsOf: home.appendingPathComponent("config.toml"), encoding: .utf8).contains("model_catalog_json"))
+    }
+    func testAPICatalogRollbackAtEveryWriteBoundary() throws {
+        let ids = try seed()
+        try PrivateFiles.write(catalogFixture(), to: home.appendingPathComponent("models_cache.json"))
+        try engine.saveAPI(name: "API", baseURL: "https://example.test/v1", model: "gpt-6-astra", key: "FAKE_KEY")
+        let api = try engine.status().profiles.last!
+        let config = try PrivateFiles.read(home.appendingPathComponent("config.toml"))
+        let snapshot = vault.root.appendingPathComponent("api-models.json")
+        for previous in [nil, try catalogFixture(["old-model"])] as [Data?] {
+            if let previous { try PrivateFiles.write(previous, to: snapshot) } else { try PrivateFiles.remove(snapshot) }
+            for point in ["catalog", "config", "auth", "registry"] {
+                let failing = SwitcherEngine(home: home, vault: vault, quiescent: {}, checkpoint: { if $0 == point { throw SwitcherError.message("test failure") } })
+                XCTAssertThrowsError(try failing.activate(api.id))
+                XCTAssertEqual(try PrivateFiles.read(snapshot), previous)
+                XCTAssertEqual(try PrivateFiles.read(home.appendingPathComponent("config.toml")), config)
+                XCTAssertEqual(try engine.status().activeID, ids.0)
+                XCTAssertFalse(try engine.hasPending())
+            }
+        }
+    }
+    func testCustomCatalogSurvivesAPIEditAndActivation() throws {
+        let ids = try seed()
+        try engine.saveAPI(name: "API", baseURL: "https://example.test/v1", model: "gpt-6-astra", key: "FAKE_KEY")
+        let api = try engine.status().profiles.last!
+        try engine.activate(api.id)
+        let path = home.appendingPathComponent("config.toml")
+        let custom = "model_catalog_json = '/custom/models.json'\n"
+        try PrivateFiles.write(Data((custom + String(contentsOf: path, encoding: .utf8)).utf8), to: path)
+        try engine.activate(ids.0)
+        try engine.saveAPI(name: "API", baseURL: "https://example.test/v2", model: "gpt-6-sol", key: "", replacing: api.id)
+        try PrivateFiles.write(catalogFixture(), to: home.appendingPathComponent("models_cache.json"))
+        try engine.activate(api.id)
+        XCTAssertTrue(try String(contentsOf: path, encoding: .utf8).contains(custom))
+        XCTAssertNil(try PrivateFiles.read(vault.root.appendingPathComponent("api-models.json")))
+    }
     func testVaultEncryptionTamperAndPermissions() throws {
         _ = try seed()
         let path = vault.root.appendingPathComponent("profiles.enc")

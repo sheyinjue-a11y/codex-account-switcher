@@ -89,6 +89,20 @@ public enum ConfigEditor {
         let values = try split(route.lines.joined(separator: "\n")).values
         return try values["model"].map(scalar) ?? ""
     }
+    static func catalog(_ route: Route) throws -> String? {
+        try split(route.lines.joined(separator: "\n")).values["model_catalog_json"].map(scalar)
+    }
+    static func withCatalog(_ route: Route, path: String?) throws -> Route {
+        var lines = route.lines.filter { $0.range(of: #"^\s*model_catalog_json\s*="#, options: .regularExpression) == nil }
+        if let path {
+            let quoted = String(decoding: try JSONEncoder().encode(path), as: UTF8.self)
+            lines.append("model_catalog_json = \(quoted)")
+        }
+        return Route(lines: lines)
+    }
+    static func preservingCatalog(_ route: Route, from previous: Route) -> Route {
+        Route(lines: route.lines + previous.lines.filter { $0.range(of: #"^\s*model_catalog_json\s*="#, options: .regularExpression) != nil })
+    }
     public static func assertFileImport(_ text: String) throws {
         if let store = try split(text).values["cli_auth_credentials_store"], try scalar(store) != "file" {
             throw SwitcherError.message("当前使用 Keychain/auto 登录。请先在工具中添加登录，或明确改用 file 登录；不会导入可能过期的 auth.json。")
@@ -119,5 +133,28 @@ public enum ConfigEditor {
         }
         let clean = url.hasSuffix("/") ? String(url.dropLast()) : url
         return Route(lines: ["model_provider = \"openai\"", "openai_base_url = \"\(clean)\"", "model = \"\(model)\""])
+    }
+}
+
+enum ModelCatalog {
+    private struct Header: Decodable {
+        struct Model: Decodable {
+            let slug: String
+            let visibility: String?
+            let supported_in_api: Bool?
+        }
+        let models: [Model]
+    }
+    // Inspect only the envelope. Serialize the original objects so new model
+    // metadata, instructions and visibility survive without a switcher update.
+    static func validated(_ data: Data?) -> Data? {
+        guard let data, let header = try? JSONDecoder().decode(Header.self, from: data),
+              !header.models.isEmpty,
+              header.models.allSatisfy({ !$0.slug.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              Set(header.models.map(\.slug)).count == header.models.count,
+              header.models.contains(where: { $0.visibility == "list" && $0.supported_in_api == true }),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = object["models"] else { return nil }
+        return try? JSONSerialization.data(withJSONObject: ["models": models], options: [.sortedKeys])
     }
 }

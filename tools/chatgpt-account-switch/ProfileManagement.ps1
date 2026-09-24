@@ -135,6 +135,7 @@ function Get-TransactionFile($Settings,[string]$Key) {
         'auth' { return Join-Path $Settings.CanonicalHome 'auth.json' }
         'config' { return Join-Path $Settings.CanonicalHome 'config.toml' }
         'labCatalog' { return Join-Path $Settings.VaultRoot 'lab-models.json' }
+        'apiCatalog' { return Join-Path $Settings.VaultRoot 'api-models.json' }
     }
     if ($Key -cmatch '^(auth|route):(.+)$') { return Get-ProfileSecretPath $Settings $Matches[2] $Matches[1] }
     throw 'Invalid transaction file key.'
@@ -400,12 +401,14 @@ function Invoke-ProfileSwitch($Settings,[string]$TargetProfileId,[switch]$WhatIf
         if (-not (Test-ProfileBackend $Settings $active)) { throw 'Active authentication/configuration is invalid.' }
         $keys=@('auth','config','state',('auth:'+$active.id),('route:'+$active.id))
         if ($target.id -eq 'lab') { $keys+=@('route:lab','labCatalog') }
+        if ($target.kind -eq 'responses_api') { $keys+=@('apiCatalog','labCatalog') }
         $tx=Start-ProfileTransaction $Settings switch switch ($keys | Select-Object -Unique)
         try {
             Write-ProfileAuth $Settings $active (Read-AuthBytes (Join-Path $Settings.CanonicalHome 'auth.json'))
             Write-ProfileRoute $Settings $active $currentRoute
             if ($target.id -eq $active.id) { $targetBytes=Read-ProfileAuth $Settings $active; $targetRoute=$currentRoute }
             if ($target.id -eq 'lab' -and (Get-RequestValue $targetRoute legacyLabBootstrap $true)) { $targetRoute=ConvertTo-LabBootstrapRoute $targetRoute $Settings; Write-ProfileRoute $Settings $target $targetRoute }
+            elseif ($target.kind -eq 'responses_api') { $targetRoute=Add-ApiModelCatalogRoute $targetRoute $Settings }
             $config=[IO.File]::ReadAllText((Join-Path $Settings.CanonicalHome 'config.toml'))
             Write-AtomicText (Join-Path $Settings.CanonicalHome 'config.toml') (Set-ProviderRoute $config $targetRoute)
             Invoke-ProfileFailurePoint $Settings 'AfterConfigWrite'
@@ -529,6 +532,10 @@ function Invoke-ApiProfileWrite($Settings,$Request,[string]$ProfileId) {
     if ($ProfileId) {
         $profile=Get-ProfileById $registry $ProfileId
         if ($profile.kind -ne 'responses_api') { throw 'An API profile is required.' }
+        # Editing the endpoint/model must not discard an explicit catalog.
+        $previousRoute=Read-ProfileRoute $Settings $profile
+        if ($state.activeProfileId -eq $ProfileId) { $previousRoute=Get-ProviderRoute ([IO.File]::ReadAllText((Join-Path $Settings.CanonicalHome 'config.toml'))) }
+        $route.Entries=@($route.Entries)+@($previousRoute.Entries | Where-Object { $_.IsRoot -and $_.Line -match '^\s*model_catalog_json\s*=' })
         if (-not $key) {
             $oldBytes=Read-ProfileAuth $Settings $profile
             try { $key=([Text.Encoding]::UTF8.GetString($oldBytes)|ConvertFrom-Json).OPENAI_API_KEY }
@@ -544,9 +551,10 @@ function Invoke-ApiProfileWrite($Settings,$Request,[string]$ProfileId) {
     $bytes=[Text.Encoding]::UTF8.GetBytes((@{auth_mode='apikey';OPENAI_API_KEY=$key}|ConvertTo-Json -Compress))
     $keys=@('registry',('auth:'+$profile.id),('route:'+$profile.id))
     $activeEdit=$ProfileId -and $state.activeProfileId -eq $ProfileId
-    if ($activeEdit) { $keys+=@('auth','config') }
+    if ($activeEdit) { $keys+=@('auth','config','apiCatalog','labCatalog') }
     $tx=Start-ProfileTransaction $Settings management $operation $keys
     try {
+        if ($activeEdit) { $route=Add-ApiModelCatalogRoute $route $Settings }
         Write-ProfileAuth $Settings $profile $bytes
         Write-ProfileRoute $Settings $profile $route
         Invoke-ProfileFailurePoint $Settings AfterSecretWrite
