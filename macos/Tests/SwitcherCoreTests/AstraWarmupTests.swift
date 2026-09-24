@@ -145,4 +145,33 @@ final class AstraWarmupTests: XCTestCase {
         XCTAssertNotNil(allHooks["OtherEvent"])
         XCTAssertFalse(try AstraWarmup.isEnabled(home: home, root: root))
     }
+
+    func testInstallerRejectsShellExpansionCharactersInExecutablePath() throws {
+        for component in ["$USER", "`id`", #"back\slash"#] {
+            let executable = sandbox.appendingPathComponent(component).appendingPathComponent("CodexAccountSwitcher")
+            XCTAssertThrowsError(try AstraWarmup.setEnabled(true, home: home, root: root,
+                                                             executable: executable, consent: true), component)
+        }
+        XCTAssertNil(try PrivateFiles.read(home.appendingPathComponent("hooks.json")))
+        XCTAssertNil(try PrivateFiles.read(root.appendingPathComponent("astra-warmup.json")))
+    }
+
+    func testEditorRejectsShellExpansionInMovedOwnedHandler() throws {
+        try enable()
+        let hooksURL = home.appendingPathComponent("hooks.json")
+        let data = try XCTUnwrap(PrivateFiles.read(hooksURL))
+        var document = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var hooks = try XCTUnwrap(document["hooks"] as? [String: Any])
+        var groups = try XCTUnwrap(hooks["UserPromptSubmit"] as? [[String: Any]])
+        var handlers = try XCTUnwrap(groups[0]["hooks"] as? [[String: Any]])
+        handlers[0]["command"] = #""/tmp/$USER/CodexAccountSwitcher" --astra-warmup"#
+        groups[0]["hooks"] = handlers
+        hooks["UserPromptSubmit"] = groups
+        document["hooks"] = hooks
+        let modified = try JSONSerialization.data(withJSONObject: document)
+        try PrivateFiles.write(modified, to: hooksURL)
+        XCTAssertThrowsError(try AstraWarmup.setEnabled(false, home: home, root: root,
+                                                         executable: sandbox.appendingPathComponent("CodexAccountSwitcher"), consent: false))
+        XCTAssertEqual(try PrivateFiles.read(hooksURL), modified)
+    }
 }
