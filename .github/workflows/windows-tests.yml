@@ -23,6 +23,16 @@ jobs:
       - name: Run isolated PowerShell and WPF tests
         shell: powershell
         run: ./tools/chatgpt-account-switch/Test-All.ps1 -SkipSharedSessions
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify native warmup ordering with official Codex (loopback only)
+        shell: powershell
+        run: |
+          python -m pip install -r requirements-test.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Test dependencies failed.' }
+          python tools/chatgpt-account-switch/Test-AstraWarmupIntegration.py
+          if ($LASTEXITCODE -ne 0) { throw 'Warmup integration failed.' }
       - name: Build sanitized Windows distribution
         shell: powershell
         run: |
