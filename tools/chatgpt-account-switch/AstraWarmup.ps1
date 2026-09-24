@@ -55,15 +55,34 @@ function Get-AstraHash([string]$Value) {
 }
 
 function Get-AstraEndpoint([string]$ConfigText) {
-    if ($ConfigText -match '(?im)^\s*\[\s*model_providers\.openai\s*\]') { throw 'Built-in provider is shadowed.' }
-    $root=($ConfigText -split '\r?\n' | Where-Object { $_ -match '^\s*\[' } | Select-Object -First 1)
-    $before=if ($null -eq $root) { $ConfigText } else { $ConfigText.Substring(0,$ConfigText.IndexOf($root)) }
     $values=@{}
-    foreach ($line in ($before -split '\r?\n')) {
-        if ($line -match '^\s*(model_provider|openai_base_url|cli_auth_credentials_store)\s*=') {
-            $name=$Matches[1]
-            if ($values.ContainsKey($name) -or $line -cnotmatch '^\s*[A-Za-z_]+\s*=\s*["'']([^"'']+)["'']\s*(?:#.*)?$') { throw 'Unsupported route configuration.' }
-            $values[$name]=$Matches[1]
+    $inTable=$false
+    $tableKey='(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|''[^'']*'')'
+    foreach ($raw in ($ConfigText -split '\r?\n')) {
+        $line=$raw.Trim()
+        if ($line.StartsWith('[')) {
+            $inTable=$true
+            $header=[regex]::Match($line,('^\[\[?\s*(?<first>'+$tableKey+')\s*(?:\.\s*(?<second>'+$tableKey+'))?\s*(?=[.\]])'))
+            if (-not $header.Success) { throw 'Unsupported route configuration.' }
+            $parts=@($header.Groups['first'].Value,$header.Groups['second'].Value) | ForEach-Object {
+                if ($_.StartsWith('"')) { $_ | ConvertFrom-Json -ErrorAction Stop }
+                elseif ($_.StartsWith("'")) { $_.Substring(1,$_.Length-2) }
+                else { $_ }
+            }
+            if ($parts[0] -ceq 'model_providers' -and (-not $parts[1] -or $parts[1] -ceq 'openai')) { throw 'Built-in provider may be shadowed.' }
+        }
+        if ($inTable -or -not $line -or $line.StartsWith('#')) { continue }
+        # Only unambiguous one-line root scalars are supported. In particular,
+        # quoted/dotted keys and multiline values cannot hide an active profile.
+        if ($line -cnotmatch '^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$') { throw 'Unsupported route configuration.' }
+        $name=$Matches[1]; $value=$Matches[2]
+        if ($values.ContainsKey($name) -or $value -cnotmatch '^(?:"(?:[^"\\]|\\.)*"|''[^'']*''|true|false|[+-]?[0-9][0-9_.]*|\[[^\[\]"'']*\])\s*(?:#.*)?$') { throw 'Unsupported route configuration.' }
+        if ($name -cin @('profile','model_providers','profiles','forced_login_method','forced_chatgpt_workspace_id','chatgpt_base_url')) { throw 'Unsupported route override.' }
+        $values[$name]=$value
+        if ($name -cin @('model_provider','openai_base_url','cli_auth_credentials_store')) {
+            if ($value -cmatch '^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$') { $values[$name]=('"'+$Matches[1]+'"') | ConvertFrom-Json -ErrorAction Stop }
+            elseif ($value -cmatch '^''([^'']*)''\s*(?:#.*)?$') { $values[$name]=$Matches[1] }
+            else { throw 'Unsupported route configuration.' }
         }
     }
     if ($values['model_provider'] -and $values['model_provider'] -cne 'openai') { throw 'Unsupported provider.' }

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import signal
 import subprocess
@@ -39,7 +40,9 @@ def main():
                                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         assert not smoke.stderr and json.loads(smoke.stdout)['decision'] == 'block'
     requests = []
-    response_mode = {'fail': False}
+    request_times = []
+    response_mode = {'kind': 'complete'}
+    server_stopping = threading.Event()
 
     class Endpoint(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -49,6 +52,13 @@ def main():
             self.send_error(426, 'Loopback fixture uses HTTP streaming only')
 
         def do_POST(self):
+            try:
+                self.respond()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                # Deadline/cap cancellation deliberately closes the native socket.
+                pass
+
+        def respond(self):
             raw = self.rfile.read(int(self.headers.get('Content-Length', '0')))
             if self.headers.get('Content-Encoding') == 'gzip':
                 raw = gzip.decompress(raw)
@@ -56,15 +66,38 @@ def main():
                 raw = zstandard.ZstdDecompressor().decompress(raw, max_output_size=16 * 1024 * 1024)
             body = json.loads(raw)
             requests.append((self.path, body))
+            request_times.append(time.monotonic())
             if body.get('model') == 'gpt-5.6-sol':
+                mode = response_mode['kind']
                 response = {'id': 'resp_fixture', 'object': 'response', 'created_at': 0,
-                            'model': 'gpt-5.6-sol', 'status': 'failed' if response_mode['fail'] else 'completed',
-                            'output': [], 'error': {'message': 'FAKE_PRIVATE_ERROR', 'code': 'fixture'} if response_mode['fail'] else None,
+                            'model': 'gpt-5.6-sol', 'status': 'failed' if mode == 'fail' else 'completed',
+                            'output': [], 'error': {'message': 'FAKE_PRIVATE_ERROR', 'code': 'fixture'} if mode == 'fail' else None,
                             'usage': {'input_tokens': 1, 'output_tokens': 1, 'total_tokens': 2}}
-                kind = 'response.failed' if response_mode['fail'] else 'response.completed'
+                kind = 'response.failed' if mode == 'fail' else 'response.completed'
                 payload = ('event: ' + kind + '\ndata: ' + json.dumps({'type': kind, 'response': response}) + '\n\n').encode()
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/event-stream')
+                if mode in ('stall', 'oversize'):
+                    # No Content-Length: exercise the streaming cap, not only the
+                    # advertised-length guard. A valid completion before the bad
+                    # tail must not cause premature success or a session marker.
+                    self.send_header('Transfer-Encoding', 'chunked')
+                    self.send_header('Connection', 'close')
+                    self.close_connection = True
+                    self.end_headers()
+
+                    def chunk(data):
+                        self.wfile.write(f'{len(data):X}\r\n'.encode() + data + b'\r\n')
+                        self.wfile.flush()
+
+                    chunk(payload + b': FAKE_PRIVATE_ERROR\n\n')
+                    if mode == 'stall':
+                        server_stopping.wait(30)
+                    else:
+                        for _ in range(20):
+                            chunk(b':' + b'x' * 8190 + b'\n')
+                    self.wfile.write(b'0\r\n\r\n')
+                    return
             else:
                 # Stop at transport; no real model or tools run.
                 payload = b'{"error":{"message":"Offline fixture received Astra","type":"invalid_request_error"}}'
@@ -113,9 +146,13 @@ def main():
             wrapper = root / 'Invoke-AstraWarmup.ps1'
             wrapper.write_text(
                 "$ErrorActionPreference='Stop'\n. " + ps_quote(module) + '\n'
+                'try {\n'
                 '$event=[Console]::In.ReadToEnd() | ConvertFrom-Json\n'
                 '$result=Invoke-AstraWarmup -HomePath ' + ps_quote(home) + ' -VaultPath ' + ps_quote(vault) + ' -Event $event\n'
-                'if ($null -ne $result) { $result | ConvertTo-Json -Compress -Depth 10 }\n', encoding='utf-8-sig')
+                'if ($null -ne $result) { $result | ConvertTo-Json -Compress -Depth 10 }\n'
+                # Match the shipped entry's sanitized exception boundary while
+                # retaining explicit isolated fixture paths.
+                '} catch { [Console]::Out.WriteLine(\'{"decision":"block","reason":"Astra warmup failed; original message was not sent. Retry or disable warmup."}\') }\n', encoding='utf-8-sig')
             setup = '. ' + ps_quote(module) + '; Set-AstraWarmupEnabled -HomePath ' + ps_quote(home) + ' -VaultPath ' + ps_quote(vault) + ' -HookScriptPath ' + ps_quote(wrapper) + ' -Enabled $true -ConfirmCost $true'
             subprocess.run(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', setup],
                            env=env, cwd=project, check=True, capture_output=True, creationflags=creation, timeout=15)
@@ -165,6 +202,8 @@ def main():
         def start():
             return call('thread/start', {'cwd': str(project), 'model': 'gpt-6-astra', 'sandbox': 'read-only', 'approvalPolicy': 'never'})['thread']['id']
 
+        hook_runs = []
+
         def turn(thread_id, prompt):
             result = call('turn/start', {'threadId': thread_id, 'input': [{'type': 'text', 'text': prompt}]})
             turn_id = result['turn']['id']
@@ -177,6 +216,7 @@ def main():
                     continue
                 if message.get('method') == 'hook/completed':
                     hook_status = params['run']['status']
+                    hook_runs.append(params['run'])
                 if message.get('method') == 'turn/completed' and params.get('turn', {}).get('id') == turn_id:
                     return hook_status
             raise AssertionError('Native hook/turn did not finish within bounded time')
@@ -194,18 +234,58 @@ def main():
         assert turn(thread, 'PRIVATE_ORIGINAL_SENTINEL_SECOND') == 'completed'
         assert [body['model'] for _, body in requests] == ['gpt-5.6-sol', 'gpt-6-astra', 'gpt-6-astra']
         print('PASS: The second message in the same conversation does not repeat warmup.', flush=True)
-        response_mode['fail'] = True
+        response_mode['kind'] = 'fail'
         before = len(requests)
         assert turn(start(), 'PRIVATE_ORIGINAL_SENTINEL_BLOCKED') == 'blocked'
         assert len(requests) == before + 1 and requests[-1][1]['model'] == 'gpt-5.6-sol'
         assert all('PRIVATE_ORIGINAL_SENTINEL_BLOCKED' not in json.dumps(body) for _, body in requests)
         print('PASS: Failed warmup blocks the original Astra request in the official runtime.', flush=True)
+
+        def markers():
+            directory = vault / 'astra-warmup-sessions'
+            try:
+                entries = list(directory.iterdir())
+            except FileNotFoundError:
+                return set()
+            return {path.name for path in entries if re.fullmatch('[0-9a-f]{64}', path.name)}
+
+        for mode in ('stall', 'oversize'):
+            response_mode['kind'] = mode
+            thread = start()
+            before = len(requests)
+            old_markers = markers()
+            prompt = f'PRIVATE_ORIGINAL_SENTINEL_{mode.upper()}'
+            started = time.monotonic()
+            assert turn(thread, prompt) == 'blocked', mode
+            elapsed = time.monotonic() - started
+            assert len(requests) == before + 1, f'{mode}: failure must not retry or send Astra'
+            network_elapsed = time.monotonic() - request_times[before]
+            assert network_elapsed < 23 and elapsed < 27, f'{mode}: native deadline exceeded ({elapsed:.2f}s)'
+            if mode == 'stall':
+                assert network_elapsed >= 18, 'Stall fixture must exercise the native 20-second deadline'
+            else:
+                assert network_elapsed < 10, 'Oversized stream must block promptly, before the deadline'
+            assert markers() == old_markers, f'{mode}: failed response created a completion marker'
+            assert requests[-1][1]['model'] == 'gpt-5.6-sol'
+            assert requests[-1][1]['input'] == 'Reply only OK.'
+            assert 'PRIVATE_ORIGINAL_SENTINEL' not in json.dumps(requests[-1][1])
+            output = json.dumps(hook_runs[-1])
+            assert len(output) < 4096, f'{mode}: failure output must stay bounded'
+            assert 'Astra warmup failed; original message was not sent. Retry or disable warmup.' in output, output
+            assert all(secret not in output for secret in (fake_key, 'FAKE_PRIVATE_ERROR', prompt)), output
+            response_mode['kind'] = 'complete'
+            assert turn(thread, prompt) == 'completed', f'{mode}: explicit retry must succeed'
+            assert [body['model'] for _, body in requests[before:]] == ['gpt-5.6-sol', 'gpt-5.6-sol', 'gpt-6-astra']
+            users = [item for item in requests[-1][1]['input'] if item.get('role') == 'user']
+            assert any(part.get('text') == prompt for part in users[-1]['content']), 'Retry must preserve the original user text'
+            assert len(markers() - old_markers) == 1, f'{mode}: successful retry must mark completion'
+            print(f'PASS: Native {mode} blocks safely in {elapsed:.2f}s with no marker or automatic retry; manual retry warms and releases Astra.', flush=True)
         assert sentinel.read_bytes() == b'WORKSPACE_MUST_NOT_CHANGE'
         assert set(project.iterdir()) == {sentinel}, 'No files may be added to the workspace'
         for path in vault.rglob('*'):
             if path.is_file():
                 text = path.read_bytes()
-                assert fake_key.encode() not in text and b'PRIVATE_ORIGINAL_SENTINEL' not in text
+                assert fake_key.encode() not in text and b'PRIVATE_ORIGINAL_SENTINEL' not in text and b'FAKE_PRIVATE_ERROR' not in text
         print('PASS: No workspace mutation, prompt persistence or copied plaintext API key.', flush=True)
     finally:
         if process is not None:
@@ -218,6 +298,7 @@ def main():
                 except ProcessLookupError:
                     pass
             process.wait(timeout=10)
+        server_stopping.set()
         server.shutdown(); server.server_close()
         if root.parent != parent or not root.name.startswith('astra-warmup-integration-'):
             raise RuntimeError('Refusing cleanup outside the isolated fixture')

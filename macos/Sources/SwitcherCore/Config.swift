@@ -23,10 +23,25 @@ public enum ConfigEditor {
         for raw in text.split(separator: "\n", omittingEmptySubsequences: false).dropLast(text.hasSuffix("\n") ? 1 : 0) {
             let original = String(raw)
             let line = original.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.hasPrefix("[") { inTable = true }
-            // An overridden built-in provider would defeat the shared-provider contract.
-            if line.range(of: #"^\[\s*model_providers\s*\.\s*["']?openai["']?\s*[.\]]"#, options: .regularExpression) != nil {
-                throw SwitcherError.message("检测到 openai provider 自定义表。请先恢复内置 provider；未修改配置。")
+            if line.hasPrefix("[") {
+                inTable = true
+                // Decode the first two table components so quoted/escaped names
+                // cannot bypass the built-in provider guard. Keep unrelated tables.
+                let key = #"(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')"#
+                let pattern = "^\\[\\[?\\s*(?<first>" + key + ")\\s*(?:\\.\\s*(?<second>" + key + "))?\\s*(?=[.\\]])"
+                let expression = try NSRegularExpression(pattern: pattern)
+                guard let match = expression.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else {
+                    throw SwitcherError.message("配置包含暂不支持的表名；未修改配置。")
+                }
+                let parts = try ["first", "second"].map { name -> String in
+                    guard let range = Range(match.range(withName: name), in: line) else { return "" }
+                    let component = String(line[range])
+                    if component.hasPrefix("\"") || component.hasPrefix("'") { return try scalar(component) }
+                    return component
+                }
+                if parts[0] == "model_providers" && (parts[1].isEmpty || parts[1] == "openai") {
+                    throw SwitcherError.message("检测到 openai provider 自定义表。请先恢复内置 provider；未修改配置。")
+                }
             }
             if !inTable && !line.isEmpty && !line.hasPrefix("#") {
                 guard !line.contains("\"\"\""), !line.contains("'''"),

@@ -41,9 +41,13 @@ final class AstraWarmupTests: XCTestCase {
 
     private func markerCount() throws -> Int {
         let directory = root.appendingPathComponent("astra-warmup-sessions")
-        return (try? FileManager.default.contentsOfDirectory(atPath: directory.path).filter {
-            $0.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
-        }.count) ?? 0
+        do {
+            return try FileManager.default.contentsOfDirectory(atPath: directory.path).filter {
+                $0.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
+            }.count
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            return 0
+        }
     }
 
     func testMarkerCountDistinguishesMissingDirectoryFromReadFailure() throws {
