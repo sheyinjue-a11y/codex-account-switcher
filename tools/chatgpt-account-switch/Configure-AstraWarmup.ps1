@@ -14,7 +14,7 @@ $xaml=@'
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <TextBlock Grid.Row="0" Text="First-message Astra warmup" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,12"/>
     <TextBlock Grid.Row="1" Name="CurrentStatus" TextWrapping="Wrap" Margin="0,0,0,16"/>
-    <TextBlock Grid.Row="2" TextWrapping="Wrap" Margin="0,0,0,14">When enabled for this API key and endpoint, the first gpt-6-astra message in each session waits for one gpt-5.6-sol request. The request sends only “Reply only OK.” and may incur API charges. A failed warmup blocks the original message.</TextBlock>
+    <TextBlock Grid.Row="2" TextWrapping="Wrap" Margin="0,0,0,14">When enabled for this API key and endpoint, the first gpt-6-astra message in each session waits for one gpt-5.6-sol request. The request sends only 'Reply only OK.' and may incur API charges. A failed warmup blocks the original message.</TextBlock>
     <CheckBox Grid.Row="3" Name="CostConsent" Content="I understand the extra API request may incur charges." Margin="0,0,0,16"/>
     <TextBlock Grid.Row="4" TextWrapping="Wrap" Foreground="#444444">Codex will ask you to review and trust this user-level hook. This tool cannot approve trust for you. Close and restart Codex after a change. To stop warmup for the current API account, choose Disable. Other API accounts keep their own settings.</TextBlock>
     <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">

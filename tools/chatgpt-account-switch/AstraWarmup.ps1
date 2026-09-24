@@ -160,8 +160,18 @@ function Get-AstraHookState([string]$HomePath) {
 function Test-AstraOwnedHandler($Handler,[string]$HookScriptPath) {
     if ((Get-AstraProperty $Handler 'statusMessage') -cne $script:AstraStatus) { return $false }
     $command=Get-AstraProperty $Handler 'command'
-    $expected='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$HookScriptPath+'"'
-    if ((Get-AstraProperty $Handler 'type') -cne 'command' -or $command -cne $expected) { throw 'A conflicting Astra warmup handler exists.' }
+    $prefix='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'
+    if ((Get-AstraProperty $Handler 'type') -cne 'command' -or $command -isnot [string] -or
+        -not $command.StartsWith($prefix,[StringComparison]::Ordinal) -or -not $command.EndsWith('"',[StringComparison]::Ordinal)) { throw 'A conflicting Astra warmup handler exists.' }
+    $target=$command.Substring($prefix.Length,$command.Length-$prefix.Length-1)
+    if ($target.Contains('"') -or $target -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+\\)') { throw 'A conflicting Astra warmup handler exists.' }
+    try {
+        $full=[IO.Path]::GetFullPath($target)
+        $folder=[IO.Path]::GetDirectoryName($full)
+        if ([IO.Path]::GetFileName($full) -cne 'Invoke-AstraWarmup.ps1' -or
+            [IO.Path]::GetFileName($folder) -cne 'chatgpt-account-switch' -or
+            [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($folder)) -cne 'tools') { throw 'A conflicting Astra warmup handler exists.' }
+    } catch { throw 'A conflicting Astra warmup handler exists.' }
     return $true
 }
 
@@ -171,17 +181,26 @@ function Set-AstraHook([string]$HomePath,[string]$HookScriptPath,[bool]$Install)
     $existingGroups=Get-AstraProperty $document.hooks 'UserPromptSubmit'
     $groups=if ($null -eq $existingGroups) { @() } else { @($existingGroups) }
     $found=0
+    $updatedOwned=$false
+    $expectedCommand='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$HookScriptPath+'"'
     $updated=New-Object 'Collections.Generic.List[object]'
     foreach ($group in $groups) {
         $handlers=New-Object 'Collections.Generic.List[object]'
+        $removedOwned=$false
         foreach ($handler in $group.hooks) {
-            if (Test-AstraOwnedHandler $handler $HookScriptPath) { $found++; if ($Install) { $handlers.Add($handler) } }
+            if (Test-AstraOwnedHandler $handler $HookScriptPath) {
+                $found++
+                if ($Install) {
+                    if ($handler.command -cne $expectedCommand) { $handler.command=$expectedCommand; $updatedOwned=$true }
+                    $handlers.Add($handler)
+                } else { $removedOwned=$true }
+            }
             else { $handlers.Add($handler) }
         }
-        if ($handlers.Count -gt 0) { $group.hooks=@($handlers.ToArray()); $updated.Add($group) }
+        if ($handlers.Count -gt 0 -or -not $removedOwned) { $group.hooks=@($handlers.ToArray()); $updated.Add($group) }
     }
     if ($found -gt 1) { throw 'Duplicate Astra warmup handlers exist.' }
-    if ($Install -and $found -eq 1) { return }
+    if ($Install -and $found -eq 1 -and -not $updatedOwned) { return }
     if ($Install -and $found -eq 0) {
         $command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$HookScriptPath+'"'
         $updated.Add([pscustomobject]@{hooks=@([pscustomobject]@{type='command';command=$command;timeout=40;statusMessage=$script:AstraStatus})})

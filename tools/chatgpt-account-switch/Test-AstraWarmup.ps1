@@ -209,6 +209,28 @@ try {
     [IO.File]::WriteAllText((Join-Path $freshHome 'config.toml'),"model_provider = `"openai`"`ncli_auth_credentials_store = `"file`"`n")
     Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
     Check ((Get-Acl -LiteralPath $freshVault).AreAccessRulesProtected) 'New warmup vault has private, non-inherited access rules.'
+    $freshHooksPath=Join-Path $freshHome 'hooks.json'
+    $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
+    $emptyGroup=[pscustomobject]@{matcher='keep-empty';note='unrelated group';hooks=@()}
+    $freshHooks.hooks.UserPromptSubmit=@($emptyGroup)+@($freshHooks.hooks.UserPromptSubmit)
+    [IO.File]::WriteAllText($freshHooksPath,($freshHooks | ConvertTo-Json -Depth 20))
+    Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $false -ConfirmCost $false
+    $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
+    Check ($freshHooks.hooks.UserPromptSubmit.Count -eq 1 -and $freshHooks.hooks.UserPromptSubmit[0].matcher -ceq 'keep-empty' -and $freshHooks.hooks.UserPromptSubmit[0].hooks.Count -eq 0) 'Disable preserves an unrelated empty UserPromptSubmit group.'
+    Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
+    $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
+    $oldHookPath=Join-Path $testRoot 'old-release\tools\chatgpt-account-switch\Invoke-AstraWarmup.ps1'
+    $oldCommand='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$oldHookPath+'"'
+    $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command=$oldCommand
+    [IO.File]::WriteAllText($freshHooksPath,($freshHooks | ConvertTo-Json -Depth 20))
+    Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
+    $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
+    Check ($freshHooks.hooks.UserPromptSubmit.Count -eq 2 -and $freshHooks.hooks.UserPromptSubmit[0].matcher -ceq 'keep-empty' -and $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command -cne $oldCommand) 'Re-enable replaces a moved release command without duplicating the handler.'
+    $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command=$oldCommand
+    [IO.File]::WriteAllText($freshHooksPath,($freshHooks | ConvertTo-Json -Depth 20))
+    Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $false -ConfirmCost $false
+    $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
+    Check ($freshHooks.hooks.UserPromptSubmit.Count -eq 1 -and $freshHooks.hooks.UserPromptSubmit[0].matcher -ceq 'keep-empty') 'Disable removes a moved release handler and preserves unrelated group.'
 } finally {
     foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name,$savedEnvironment[$name],'Process') }
     if ($null -ne $server) { Stop-Job $server -ErrorAction SilentlyContinue; Remove-Job $server -Force -ErrorAction SilentlyContinue }
