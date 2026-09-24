@@ -83,6 +83,34 @@ try {
     if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'AstraWarmup.ps1')) { . (Join-Path $PSScriptRoot 'AstraWarmup.ps1') }
     Reject { Set-AstraWarmupEnabled -HomePath $homePath -VaultPath $vaultPath -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $false } 'False cost consent refuses enable.'
     Set-AstraWarmupEnabled -HomePath $homePath -VaultPath $vaultPath -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
+    $configPath=Join-Path $homePath 'config.toml'
+    $originalConfig=[IO.File]::ReadAllText($configPath)
+    $originalHooks=[IO.File]::ReadAllText((Join-Path $homePath 'hooks.json'))
+    $originalConsent=[IO.File]::ReadAllText((Join-Path $vaultPath 'astra-warmup.json'))
+    $unsupportedRoutes=@(
+        ("profile = `"work`"`n"+$originalConfig),
+        "cli_auth_credentials_store = `"file`"`n`"openai_base_url`" = `"https://actual.example.test/v1`"`n",
+        "cli_auth_credentials_store = 'file'`n'openai_base_url' = 'https://actual.example.test/v1'`n",
+        ($originalConfig+"[model_providers]`nopenai = { base_url = 'https://actual.example.test/v1' }`n")
+    )
+    foreach ($provider in @('model_providers','"model_providers"',"'model_providers'",'"\u006dodel_providers"')) {
+        foreach ($builtin in @('openai','"openai"',"'openai'",'"\u006fpenai"')) {
+            $unsupportedRoutes+=($originalConfig+"[ $provider . $builtin ]`nbase_url = 'https://actual.example.test/v1'`n")
+        }
+    }
+    foreach ($invalidConfig in $unsupportedRoutes) {
+        [IO.File]::WriteAllText($configPath,$invalidConfig)
+        Reject { Get-AstraCurrentAccount $homePath } 'Ambiguous effective route is rejected before authorization.'
+        Reject { Set-AstraWarmupEnabled -HomePath $homePath -VaultPath $vaultPath -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true } 'Unsupported route installation is rejected.'
+        Check ([IO.File]::ReadAllText((Join-Path $homePath 'hooks.json')) -ceq $originalHooks) 'Rejected route leaves hooks unchanged.'
+        Check ([IO.File]::ReadAllText((Join-Path $vaultPath 'astra-warmup.json')) -ceq $originalConsent) 'Rejected route leaves consent unchanged.'
+    }
+    $sharedConfig=$originalConfig+"[mcp_servers.demo]`ncommand = 'local-server'`n[projects.'C:\example workspace']`ntrust_level = 'trusted'`n[model_providers.other]`nbase_url = 'https://other.example.test/v1'`n"
+    [IO.File]::WriteAllText($configPath,$sharedConfig)
+    Check ((Get-AstraCurrentAccount $homePath).Endpoint -ceq "http://127.0.0.1:$port/v1") 'Unrelated project, MCP and custom provider tables do not change the route.'
+    Set-AstraWarmupEnabled -HomePath $homePath -VaultPath $vaultPath -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
+    Check ([IO.File]::ReadAllText($configPath) -ceq $sharedConfig) 'Warmup installation preserves unrelated configuration tables byte for byte.'
+    [IO.File]::WriteAllText($configPath,$originalConfig)
     $capture=Join-Path $testRoot 'requests.txt'
     Check (-not (Test-Path -LiteralPath $capture)) 'Enable made no network request.'
     $ready=Join-Path $testRoot 'ready'

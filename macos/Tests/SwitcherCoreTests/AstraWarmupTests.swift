@@ -46,6 +46,53 @@ final class AstraWarmupTests: XCTestCase {
         }.count) ?? 0
     }
 
+    func testMarkerCountDistinguishesMissingDirectoryFromReadFailure() throws {
+        XCTAssertEqual(try markerCount(), 0)
+        try PrivateFiles.write(Data("not a directory".utf8), to: root.appendingPathComponent("astra-warmup-sessions"))
+        XCTAssertThrowsError(try markerCount())
+    }
+
+    func testAmbiguousRoutesBlockBeforeTransportAndInstallationPreservesConsentAndHooks() throws {
+        try enable()
+        let configURL = home.appendingPathComponent("config.toml")
+        let config = String(decoding: try XCTUnwrap(PrivateFiles.read(configURL)), as: UTF8.self)
+        let hooksURL = home.appendingPathComponent("hooks.json")
+        let consentURL = root.appendingPathComponent("astra-warmup.json")
+        let hooks = try PrivateFiles.read(hooksURL)
+        let consent = try PrivateFiles.read(consentURL)
+        var invalid = ["profile = \"work\"\n" + config,
+                       "cli_auth_credentials_store = 'file'\n\"openai_base_url\" = 'https://actual.example.test/v1'\n",
+                       "cli_auth_credentials_store = 'file'\n'openai_base_url' = 'https://actual.example.test/v1'\n",
+                       config + "[model_providers]\nopenai = { base_url = 'https://actual.example.test/v1' }\n"]
+        for provider in ["model_providers", "\"model_providers\"", "'model_providers'", #""\u006dodel_providers""#] {
+            for builtin in ["openai", "\"openai\"", "'openai'", #""\u006fpenai""#] {
+                invalid.append(config + "[ \(provider) . \(builtin) ]\nbase_url = 'https://actual.example.test/v1'\n")
+            }
+        }
+        let transport: AstraWarmup.Transport = { _ in
+            XCTFail("Ambiguous route must be rejected before transport")
+            return (200, "application/json", Data(#"{"status":"completed"}"#.utf8))
+        }
+        for text in invalid {
+            try PrivateFiles.write(Data(text.utf8), to: configURL)
+            XCTAssertThrowsError(try enable(), text)
+            XCTAssertEqual(try PrivateFiles.read(hooksURL), hooks)
+            XCTAssertEqual(try PrivateFiles.read(consentURL), consent)
+            XCTAssertEqual(String(decoding: try XCTUnwrap(AstraWarmup.run(event: event(), home: home, root: root, transport: transport)), as: UTF8.self), block)
+            XCTAssertEqual(try markerCount(), 0)
+        }
+    }
+
+    func testUnrelatedConfigTablesPreservedByWarmupInstallation() throws {
+        let configURL = home.appendingPathComponent("config.toml")
+        var config = try XCTUnwrap(PrivateFiles.read(configURL))
+        config.append(Data("[mcp_servers.demo]\ncommand = 'local-server'\n[projects.\"/Users/test/example workspace\"]\ntrust_level = 'trusted'\n[model_providers.other]\nbase_url = 'https://other.example.test/v1'\n".utf8))
+        try PrivateFiles.write(config, to: configURL)
+        try enable()
+        XCTAssertTrue(try AstraWarmup.isEnabled(home: home, root: root))
+        XCTAssertEqual(try PrivateFiles.read(configURL), config)
+    }
+
     func testSuccessfulWarmupSendsOnlyFixedSolRequestAndRunsOncePerSession() throws {
         try enable()
         var requests: [URLRequest] = []
