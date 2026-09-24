@@ -758,6 +758,23 @@ function Get-LabModelCatalogPath {
     return Get-ApiModelCatalogPath -Settings $Settings -CatalogName 'lab-models.json'
 }
 
+function Get-OwnedApiCatalogName {
+    param([string]$Line,[string]$VaultRoot)
+    if ($Line -cnotmatch '^\s*model_catalog_json\s*=\s*(["''])(.*?)\1\s*(?:#.*)?$') { return $null }
+    $quote=$Matches[1]
+    $rawPath=$Matches[2]
+    try {
+        $candidate=if ($quote -ceq '"') { ('"'+$rawPath+'"') | ConvertFrom-Json -ErrorAction Stop } else { $rawPath }
+        if (-not [IO.Path]::IsPathRooted($candidate)) { return $null }
+        $full=[IO.Path]::GetFullPath($candidate)
+        foreach ($name in @('api-models.json','lab-models.json')) {
+            $owned=[IO.Path]::GetFullPath((Join-Path $VaultRoot $name))
+            if ($full.Equals($owned,[StringComparison]::OrdinalIgnoreCase)) { return $name }
+        }
+    } catch { return $null }
+    return $null
+}
+
 function Add-ApiModelCatalogRoute {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Route,
@@ -768,14 +785,12 @@ function Add-ApiModelCatalogRoute {
     $entries = New-Object 'Collections.Generic.List[object]'
     foreach ($entry in @($Route.Entries)) { $entries.Add($entry) }
     $catalogEntry = @($entries | Where-Object { $_.IsRoot -and $_.Line -match '^\s*model_catalog_json\s*=' })
-    # Edited/migrated Lab profiles may still use our legacy snapshot filename.
-    foreach ($ownedName in @('api-models.json','lab-models.json')) {
-        $ownedLine = 'model_catalog_json = ' + ((Join-Path $Settings.VaultRoot $ownedName) | ConvertTo-Json -Compress)
-        if ($catalogEntry.Count -eq 1 -and $catalogEntry[0].Line -ceq $ownedLine) { $CatalogName = $ownedName; break }
-    }
+    # Edited/migrated profiles may retain our snapshot with different TOML formatting.
+    $ownedName=if ($catalogEntry.Count -eq 1) { Get-OwnedApiCatalogName $catalogEntry[0].Line $Settings.VaultRoot } else { $null }
+    if ($ownedName) { $CatalogName=$ownedName }
     $managedLine = 'model_catalog_json = ' + ((Join-Path $Settings.VaultRoot $CatalogName) | ConvertTo-Json -Compress)
     # A user-supplied catalog wins. Never rewrite it or promote hidden models.
-    if ($catalogEntry.Count -eq 0 -or $catalogEntry[0].Line -ceq $managedLine) {
+    if ($catalogEntry.Count -eq 0 -or $ownedName) {
         $catalogPath = Get-ApiModelCatalogPath -Settings $Settings -CatalogName $CatalogName
         if ($catalogPath -and $catalogEntry.Count -eq 0) {
             $entries.Add([pscustomobject]@{ Index = $entries.Count; Line = $managedLine; IsRoot = $true })

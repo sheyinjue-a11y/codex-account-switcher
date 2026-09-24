@@ -7,18 +7,18 @@ $repo=Split-Path -Parent $PSScriptRoot
 $destination=Join-Path (Join-Path $repo 'dist') $Name
 $zip=$destination+'.zip'
 if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $zip)) { throw 'Distribution already exists; choose a new -Name. Nothing overwritten.' }
-$rootFiles=@('README.md','LICENSE','SECURITY.md','CONTRIBUTING.md','requirements-test.txt','Setup.cmd','Start.cmd','Login.cmd','.gitignore','.github/workflows/windows-tests.yml','scripts/Export-PublicRelease.ps1')
+$rootFiles=@('README.md','LICENSE','SECURITY.md','CONTRIBUTING.md','requirements-test.txt','Setup.cmd','Start.cmd','Login.cmd','Astra-Warmup.cmd','.gitignore','.github/workflows/windows-tests.yml','scripts/Export-PublicRelease.ps1')
 $rootFiles+=@('assets/readme-banner.svg','assets/account-picker.png','assets/macos-picker.png')
 $rootFiles+=@('.gitattributes','.github/workflows/macos.yml','macos/Package.swift','macos/Info.plist','macos/README.md','macos/scripts/build.sh',
     'macos/Sources/SwitcherCore/Config.swift','macos/Sources/SwitcherCore/Models.swift','macos/Sources/SwitcherCore/Storage.swift','macos/Sources/SwitcherCore/Engine.swift',
     'macos/Sources/SwitcherApp/App.swift','macos/Sources/SwitcherApp/MacRuntime.swift',
     'macos/Tests/SwitcherCoreTests/ConfigTests.swift','macos/Tests/SwitcherCoreTests/EngineTests.swift')
 $toolFiles=@(
-    'AccountPicker.xaml','ProfileRegistry.ps1','ProfileManagement.ps1','ProfileDialogs.ps1',
+    'AccountPicker.xaml','ProfileRegistry.ps1','ProfileManagement.ps1','ProfileDialogs.ps1','AstraWarmup.ps1','Invoke-AstraWarmup.ps1','Configure-AstraWarmup.ps1',
     'Switch-ChatGPTAccount.ps1','Invoke-ChatGPTSwitch.ps1','Start-ChatGPT.ps1','Start-ChatGPT.vbs','Setup-Switcher.ps1','Complete-Install.cmd',
     'Test-All.ps1','Test-FreshInstall.ps1','Test-ProfileRegistry.ps1','Test-MultiProfileMigration.ps1','Test-ProfileManagement.ps1','Test-ModelCatalog.ps1',
     'Test-IdentityDrift.ps1','Test-ChatGPTEnrollment.ps1','Test-PickerRunner.ps1','Test-AccountPicker.ps1','Test-AccountPickerDescendant.ps1',
-    'Test-AccountSwitcher.ps1','Test-ProviderSwitcher.ps1','Test-Recovery.ps1','Test-MultiProfileRecovery.ps1','Test-SharedSessions.py'
+    'Test-AccountSwitcher.ps1','Test-ProviderSwitcher.ps1','Test-Recovery.ps1','Test-MultiProfileRecovery.ps1','Test-AstraWarmup.ps1','Test-SharedSessions.py'
 )
 $files=@($rootFiles)+@($toolFiles | ForEach-Object { 'tools/chatgpt-account-switch/'+$_ })
 # Scan only explicitly selected project files, never the user's auth or history.

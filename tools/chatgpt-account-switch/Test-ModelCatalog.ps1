@@ -58,6 +58,11 @@ try {
     $legacy=Get-ProviderRoute ((@($route.Entries|ForEach-Object Line)+$legacyLine)-join "`n")
     $null=Add-ApiModelCatalogRoute $legacy $s
     Check (([IO.File]::ReadAllText((Join-Path $s.VaultRoot 'lab-models.json'))|ConvertFrom-Json).models[0].slug -ceq 'future-model') 'Migrated legacy managed catalogs still refresh after an API edit.'
+    $formattedLine="  model_catalog_json  =  '"+($catalogPath.Replace('\','/'))+"'  # owned snapshot"
+    $formatted=Get-ProviderRoute ((@($route.Entries|ForEach-Object Line)+$formattedLine)-join "`n")
+    Write-AtomicText $cachePath (@{models=@(@{slug='format-refresh';visibility='list';supported_in_api=$true})}|ConvertTo-Json -Depth 10)
+    $null=Add-ApiModelCatalogRoute $formatted $s
+    Check (([IO.File]::ReadAllText($catalogPath)|ConvertFrom-Json).models[0].slug -ceq 'format-refresh') 'Formatted path to the owned catalog still refreshes it.'
     $customRoute=Get-ProviderRoute ('model_provider = "openai"'+"`n"+'openai_base_url = "https://example.test/v1"'+"`n"+'model = "gpt-6-sol"'+"`n"+"model_catalog_json = 'C:/custom/models.json'")
     Write-AtomicText $configPath (Set-ProviderRoute ([IO.File]::ReadAllText($configPath)) $customRoute)
     Invoke-ProfileSwitch $s $api.id -DoNotLaunch
