@@ -717,23 +717,28 @@ function Convert-LabRouteToSharedProvider {
     return Get-ProviderRoute -ConfigText $text
 }
 
-function Get-LabModelCatalogPath {
-    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+function Get-ApiModelCatalogPath {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Settings,
+        [ValidateSet('api-models.json','lab-models.json')][string]$CatalogName='api-models.json'
+    )
 
-    $catalogPath = Join-Path $Settings.VaultRoot 'lab-models.json'
+    $catalogPath = Join-Path $Settings.VaultRoot $CatalogName
     $cachePath = Join-Path $Settings.CanonicalHome 'models_cache.json'
     # Keep the official metadata intact, including visibility and model instructions.
-    # An explicit catalog makes the desktop picker honor visible backend models
-    # instead of its account-specific recommended-model allowlist.
+    # API-key login can use a bundled catalog instead of the refreshed cache.
+    # Explicitly select a validated snapshot, without inventing model records.
     foreach ($source in @($cachePath, $catalogPath)) {
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { continue }
         try {
             $catalog = [IO.File]::ReadAllText($source) | ConvertFrom-Json
+            if ($catalog.models -isnot [Array] -or $catalog.models.Count -eq 0) { throw 'Empty or invalid model list.' }
             $models = @($catalog.models)
-            foreach ($slug in @('gpt-5.6-sol', 'gpt-6-astra')) {
-                $matches = @($models | Where-Object { $_.slug -ceq $slug -and $_.visibility -ceq 'list' -and $_.supported_in_api -eq $true })
-                if ($matches.Count -ne 1) { throw 'Required visible API model is missing.' }
+            $slugs = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+            foreach ($model in $models) {
+                if ($model.slug -isnot [string] -or [string]::IsNullOrWhiteSpace($model.slug) -or -not $slugs.Add($model.slug)) { throw 'Invalid or duplicate model name.' }
             }
+            if (@($models | Where-Object { $_.visibility -ceq 'list' -and $_.supported_in_api -is [bool] -and $_.supported_in_api }).Count -eq 0) { throw 'No visible API models.' }
             if ($source -eq $cachePath) {
                 $text = @{ models = $models } | ConvertTo-Json -Depth 100
                 Write-AtomicText -Path $catalogPath -Text $text
@@ -744,8 +749,57 @@ function Get-LabModelCatalogPath {
             continue
         }
     }
-    Write-Warning 'Lab model catalog is unavailable. Sign in with Personal once to refresh models_cache.json, then switch to Lab again.'
+    Write-Warning 'API model catalog is unavailable. Refresh models_cache.json using an official Codex login, then activate the API profile again.'
     return $null
+}
+
+function Get-LabModelCatalogPath {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+    return Get-ApiModelCatalogPath -Settings $Settings -CatalogName 'lab-models.json'
+}
+
+function Get-OwnedApiCatalogName {
+    param([string]$Line,[string]$VaultRoot)
+    if ($Line -cnotmatch '^\s*model_catalog_json\s*=\s*(["''])(.*?)\1\s*(?:#.*)?$') { return $null }
+    $quote=$Matches[1]
+    $rawPath=$Matches[2]
+    try {
+        $candidate=if ($quote -ceq '"') { ('"'+$rawPath+'"') | ConvertFrom-Json -ErrorAction Stop } else { $rawPath }
+        if (-not [IO.Path]::IsPathRooted($candidate)) { return $null }
+        $full=[IO.Path]::GetFullPath($candidate)
+        foreach ($name in @('api-models.json','lab-models.json')) {
+            $owned=[IO.Path]::GetFullPath((Join-Path $VaultRoot $name))
+            if ($full.Equals($owned,[StringComparison]::OrdinalIgnoreCase)) { return $name }
+        }
+    } catch { return $null }
+    return $null
+}
+
+function Add-ApiModelCatalogRoute {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Route,
+        [Parameter(Mandatory = $true)][pscustomobject]$Settings,
+        [ValidateSet('api-models.json','lab-models.json')][string]$CatalogName='api-models.json'
+    )
+    $result = $Route | Select-Object *
+    $entries = New-Object 'Collections.Generic.List[object]'
+    foreach ($entry in @($Route.Entries)) { $entries.Add($entry) }
+    $catalogEntry = @($entries | Where-Object { $_.IsRoot -and $_.Line -match '^\s*model_catalog_json\s*=' })
+    # Edited/migrated profiles may retain our snapshot with different TOML formatting.
+    $ownedName=if ($catalogEntry.Count -eq 1) { Get-OwnedApiCatalogName $catalogEntry[0].Line $Settings.VaultRoot } else { $null }
+    if ($ownedName) { $CatalogName=$ownedName }
+    $managedLine = 'model_catalog_json = ' + ((Join-Path $Settings.VaultRoot $CatalogName) | ConvertTo-Json -Compress)
+    # A user-supplied catalog wins. Never rewrite it or promote hidden models.
+    if ($catalogEntry.Count -eq 0 -or $ownedName) {
+        $catalogPath = Get-ApiModelCatalogPath -Settings $Settings -CatalogName $CatalogName
+        if ($catalogPath -and $catalogEntry.Count -eq 0) {
+            $entries.Add([pscustomobject]@{ Index = $entries.Count; Line = $managedLine; IsRoot = $true })
+        } elseif (-not $catalogPath -and $catalogEntry.Count -gt 0) {
+            $null = $entries.Remove($catalogEntry[0])
+        }
+    }
+    $result.Entries = $entries.ToArray()
+    return $result
 }
 
 function ConvertTo-LabBootstrapRoute {
@@ -771,21 +825,9 @@ function ConvertTo-LabBootstrapRoute {
     if (-not $modelFound) {
         $entries.Add([pscustomobject]@{ Index = 0; Line = 'model = "gpt-5.6-sol"'; IsRoot = $true })
     }
-    if ($null -ne $Settings) {
-        $managedCatalogPath = Join-Path $Settings.VaultRoot 'lab-models.json'
-        $catalogEntry = @($entries | Where-Object { $_.IsRoot -and $_.Line -match '^\s*model_catalog_json\s*=' })
-        $managedLine = 'model_catalog_json = ' + ($managedCatalogPath | ConvertTo-Json -Compress)
-        # Preserve an explicitly configured user catalog. Refresh only ours.
-        if ($catalogEntry.Count -eq 0 -or $catalogEntry[0].Line -ceq $managedLine) {
-            $catalogPath = Get-LabModelCatalogPath -Settings $Settings
-            if ($catalogPath -and $catalogEntry.Count -eq 0) {
-                $entries.Add([pscustomobject]@{ Index = $entries.Count; Line = $managedLine; IsRoot = $true })
-            } elseif (-not $catalogPath -and $catalogEntry.Count -gt 0) {
-                $null = $entries.Remove($catalogEntry[0])
-            }
-        }
-    }
-    return [pscustomobject]@{ Provider = $Route.Provider; Endpoint = $Route.Endpoint; Entries = $entries.ToArray() }
+    $result = [pscustomobject]@{ Provider = $Route.Provider; Endpoint = $Route.Endpoint; Entries = $entries.ToArray() }
+    if ($null -ne $Settings) { return Add-ApiModelCatalogRoute -Route $result -Settings $Settings -CatalogName 'lab-models.json' }
+    return $result
 }
 
 function Get-RouteVaultPath {

@@ -26,8 +26,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/test-codex"
           tar -xzf "$RUNNER_TEMP/codex.tar.gz" -C "$RUNNER_TEMP/test-codex"
           python tools/chatgpt-account-switch/Test-SharedSessions.py --codex "$RUNNER_TEMP/test-codex/codex-$target"
+          echo "CODEX_TEST_BINARY=$RUNNER_TEMP/test-codex/codex-$target" >> "$GITHUB_ENV"
+      - name: Verify native warmup ordering with official Codex (loopback only)
+        run: |
+          set -euo pipefail
+          swift build --package-path macos --product WarmupFixture
+          bin_path=$(swift build --package-path macos --show-bin-path)
+          python tools/chatgpt-account-switch/Test-AstraWarmupIntegration.py --codex "$CODEX_TEST_BINARY" --mac-driver "$bin_path/WarmupFixture"
       - name: Build universal app and render synthetic preview
         run: bash macos/scripts/build.sh
+      - name: Check packaged non-GUI hook entry without credentials
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          entry = 'dist/macos/Codex Account Switcher.app/Contents/MacOS/CodexAccountSwitcher'
+          result = subprocess.run([entry, '--astra-warmup'], input=b'{broken', capture_output=True, timeout=10, check=True)
+          assert not result.stderr
+          assert json.loads(result.stdout)['decision'] == 'block'
+          print('PASS: Packaged hook handles malformed input without starting the GUI.')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: macOS-universal

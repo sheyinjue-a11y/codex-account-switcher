@@ -23,10 +23,25 @@ public enum ConfigEditor {
         for raw in text.split(separator: "\n", omittingEmptySubsequences: false).dropLast(text.hasSuffix("\n") ? 1 : 0) {
             let original = String(raw)
             let line = original.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.hasPrefix("[") { inTable = true }
-            // An overridden built-in provider would defeat the shared-provider contract.
-            if line.range(of: #"^\[\s*model_providers\s*\.\s*["']?openai["']?\s*[.\]]"#, options: .regularExpression) != nil {
-                throw SwitcherError.message("检测到 openai provider 自定义表。请先恢复内置 provider；未修改配置。")
+            if line.hasPrefix("[") {
+                inTable = true
+                // Decode the first two table components so quoted/escaped names
+                // cannot bypass the built-in provider guard. Keep unrelated tables.
+                let key = #"(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')"#
+                let pattern = "^\\[\\[?\\s*(?<first>" + key + ")\\s*(?:\\.\\s*(?<second>" + key + "))?\\s*(?=[.\\]])"
+                let expression = try NSRegularExpression(pattern: pattern)
+                guard let match = expression.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else {
+                    throw SwitcherError.message("配置包含暂不支持的表名；未修改配置。")
+                }
+                let parts = try ["first", "second"].map { name -> String in
+                    guard let range = Range(match.range(withName: name), in: line) else { return "" }
+                    let component = String(line[range])
+                    if component.hasPrefix("\"") || component.hasPrefix("'") { return try scalar(component) }
+                    return component
+                }
+                if parts[0] == "model_providers" && (parts[1].isEmpty || parts[1] == "openai") {
+                    throw SwitcherError.message("检测到 openai provider 自定义表。请先恢复内置 provider；未修改配置。")
+                }
             }
             if !inTable && !line.isEmpty && !line.hasPrefix("#") {
                 guard !line.contains("\"\"\""), !line.contains("'''"),
@@ -89,6 +104,20 @@ public enum ConfigEditor {
         let values = try split(route.lines.joined(separator: "\n")).values
         return try values["model"].map(scalar) ?? ""
     }
+    static func catalog(_ route: Route) throws -> String? {
+        try split(route.lines.joined(separator: "\n")).values["model_catalog_json"].map(scalar)
+    }
+    static func withCatalog(_ route: Route, path: String?) throws -> Route {
+        var lines = route.lines.filter { $0.range(of: #"^\s*model_catalog_json\s*="#, options: .regularExpression) == nil }
+        if let path {
+            let quoted = String(decoding: try JSONEncoder().encode(path), as: UTF8.self)
+            lines.append("model_catalog_json = \(quoted)")
+        }
+        return Route(lines: lines)
+    }
+    static func preservingCatalog(_ route: Route, from previous: Route) -> Route {
+        Route(lines: route.lines + previous.lines.filter { $0.range(of: #"^\s*model_catalog_json\s*="#, options: .regularExpression) != nil })
+    }
     public static func assertFileImport(_ text: String) throws {
         if let store = try split(text).values["cli_auth_credentials_store"], try scalar(store) != "file" {
             throw SwitcherError.message("当前使用 Keychain/auto 登录。请先在工具中添加登录，或明确改用 file 登录；不会导入可能过期的 auth.json。")
@@ -119,5 +148,28 @@ public enum ConfigEditor {
         }
         let clean = url.hasSuffix("/") ? String(url.dropLast()) : url
         return Route(lines: ["model_provider = \"openai\"", "openai_base_url = \"\(clean)\"", "model = \"\(model)\""])
+    }
+}
+
+enum ModelCatalog {
+    private struct Header: Decodable {
+        struct Model: Decodable {
+            let slug: String
+            let visibility: String?
+            let supported_in_api: Bool?
+        }
+        let models: [Model]
+    }
+    // Inspect only the envelope. Serialize the original objects so new model
+    // metadata, instructions and visibility survive without a switcher update.
+    static func validated(_ data: Data?) -> Data? {
+        guard let data, let header = try? JSONDecoder().decode(Header.self, from: data),
+              !header.models.isEmpty,
+              header.models.allSatisfy({ !$0.slug.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              Set(header.models.map(\.slug)).count == header.models.count,
+              header.models.contains(where: { $0.visibility == "list" && $0.supported_in_api == true }),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = object["models"] else { return nil }
+        return try? JSONSerialization.data(withJSONObject: ["models": models], options: [.sortedKeys])
     }
 }

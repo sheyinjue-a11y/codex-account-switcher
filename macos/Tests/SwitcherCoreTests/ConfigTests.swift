@@ -2,6 +2,18 @@ import XCTest
 @testable import SwitcherCore
 
 final class ConfigTests: XCTestCase {
+    func testCatalogValidationRejectsInvalidListsWithoutInventingModels() throws {
+        for text in ["{broken", "{}", "{\"models\":[]}", "{\"models\":{}}",
+                     "{\"models\":[{\"slug\":\"hidden\",\"visibility\":\"hide\",\"supported_in_api\":true}]}",
+                     "{\"models\":[{\"slug\":\"a\",\"visibility\":\"list\",\"supported_in_api\":true},{\"slug\":\"a\"}]}"] {
+            XCTAssertNil(ModelCatalog.validated(Data(text.utf8)), text)
+        }
+        XCTAssertNil(ModelCatalog.validated(nil))
+        let route = try ConfigEditor.api(baseURL: "https://example.test/v1", model: "gpt-6-astra")
+        let path = "/Users/test/用户/vault/models.json"
+        XCTAssertEqual(try ConfigEditor.catalog(ConfigEditor.withCatalog(route, path: path)), path)
+        XCTAssertEqual(try ConfigEditor.withCatalog(ConfigEditor.withCatalog(route, path: path), path: nil), route)
+    }
     func testRejectsUnsupportedOrDangerousOverrides() {
         for text in ["model_provider = \"custom\"", "profile = \"work\"", "\"model\" = \"test\"", "notify = [\n\"cmd\"\n]", "model = \"\"\"multi\nline\"\"\"", "[model_providers.openai]\nbase_url = \"https://evil.example\"", "forced_chatgpt_workspace_id = \"workspace\""] {
             XCTAssertThrowsError(try ConfigEditor.applying(Route(), to: text), text)

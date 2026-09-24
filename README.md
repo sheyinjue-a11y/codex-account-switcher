@@ -89,6 +89,24 @@ Mac 工具为 macOS 13+ Universal 应用；官方 Codex 的系统和芯片要求
 
 macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」按钮；Windows 版保留原功能。
 
+### 模型列表随官方目录更新
+
+激活 API 配置档时，两端会读取本机 Codex 已刷新的 `models_cache.json`，在切换器账号库中生成 `api-models.json`，通过 `model_catalog_json` 交给 Codex 使用。目录中已有的 GPT-6 Astra、GPT-6 Sol、GPT-6 Luna 会保留完整元数据；后续新增、改名或移除的模型也在下次激活 API 档时同步，无需逐个修改切换器代码。
+
+这不是联网查询所有模型或承诺即时更新：需要官方 Codex 先取得新目录，运行中的窗口可能需要重开。缓存缺失或损坏时使用上次有效目录；没有有效目录则不添加覆盖项。若一直使用 API 登录且本地目录未更新，可先用官方账号登录 Codex 刷新目录，再切回 API 档。不会伪造模型、把隐藏模型强制显示或保证服务商有对应权限。显式配置的自定义模型目录和 API 档已选模型会保留，官方缓存和工作区不会被改写。
+
+### Astra 首条消息自动预热（可选）
+
+默认关闭。先切换到需要使用的 API 档，Windows 双击 `Astra-Warmup.cmd`；macOS 在设置菜单中启用 Astra 预热。确认额外请求费用后，按 Codex 的提示亲自审查并信任用户级 hook，再重开 Codex。切换器不会代替你批准 hook，也不会在开启设置时发送请求。
+
+启用后，你在新会话中直接选择 `gpt-6-astra` 发送消息：工具先向同一 API 服务发送一次 `gpt-5.6-sol`、`low` 的固定短消息 `Reply only OK.`；成功后由官方 Codex 继续发送原来的 Astra 消息。原文、附件、工具和工作区内容不会发送给 Sol。同一账号的同一会话只在预热成功后记一次；失败会拦截原消息，你可以重试或关闭预热。
+
+这是实验性的服务端预热，不是在两个模型之间共享同一条网络连接，**不保证修复所有服务商的 Astra 首次连接问题**。服务商必须提供这两个模型与 Responses API；预热可能产生费用。每个 API 地址和 Key 分别授权，更换任意一个需重新启用。ChatGPT 登录及其他模型不会触发预热。仅支持默认用户目录中的文件 API 登录与内置 `openai` 路由，不支持自定义 provider/profile 或环境变量覆盖路由。
+
+关闭方法：切回对应 API 档，在同一入口选择关闭，再重开 Codex。卸载、移动或替换程序前，先逐个关闭已启用的 API 档；否则用户级 hook 仍可能指向旧文件。修改 `hooks.json` 前会保留备份，并保留其他 hook。官方客户端更新后若 hook 格式或运行时行为改变，应先关闭此实验功能并检查兼容性。
+
+预热安装路径支持普通空格和中文，但会拒绝可能被解释为命令的特殊字符；遇到路径安全提示，请把程序移到普通本地目录后再启用。
+
 ## 数据与限制
 
 | 内容 | 位置 |
@@ -119,13 +137,13 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 - **提示账号身份不一致**：若当前登录对应已注册账号，工具可校正状态；未知账号不会覆盖旧档。先备份再排查，不要手工删除凭据或恢复记录。
 - **切换成功但没启动**：登录已切换，确认官方桌面应用安装正常，再点相同配置档。
 - **移动了解压目录**：`Start.cmd` 仍可用；删除旧快捷方式后重跑 `Setup.cmd` 生成新快捷方式。安装器不会覆盖已有同名快捷方式。
-- **如何卸载**：删除程序目录和快捷方式即可停止使用。共享 `.codex` 与账号库不会自动删除，避免误删历史。若要永久移除凭据，先确认备份和当前登录。
+- **如何卸载**：若开启了 Astra 预热，先在各已启用 API 档关闭预热，再删除程序目录和快捷方式。共享 `.codex` 与账号库不会自动删除，避免误删历史。若要永久移除凭据，先确认备份和当前登录。
 
 </details>
 
 ## 验证与开发
 
-本地与 [GitHub Windows CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35187258570) 均已完成公开版回归：**12 组 PowerShell/WPF 测试**，以及本地三路由共享会话测试的 **9 次模拟请求**。测试不调用真实付费模型。
+两端 CI 包含模型目录回归和 Astra 预热测试。预热集成测试使用固定版本官方 Codex CLI 与本机模拟服务，验证 Sol → Astra 顺序、原消息保持不变、同会话不重复预热，以及失败时没有 Astra 请求；不调用真实付费模型。每次发布的实际验证结果见 Release 说明与对应提交的 Actions。
 
 <details>
 <summary><strong>查看测试命令与兼容性边界</strong></summary>
@@ -133,6 +151,8 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\chatgpt-account-switch\Test-All.ps1 -SkipSharedSessions` 执行离线 PowerShell/WPF 回归。测试使用临时目录和假凭据，不切换真实账号。
 
 共享会话集成测试另需 Python 3.12+、`zstandard` 和官方 CLI：`python tools\chatgpt-account-switch\Test-SharedSessions.py`。它使用本地模拟服务，不发送真实付费请求。详见 [开发说明](CONTRIBUTING.md)。
+
+Windows 预热集成测试：`python tools\chatgpt-account-switch\Test-AstraWarmupIntegration.py`。macOS 使用 CI 中构建的测试专用 `WarmupFixture`，该程序不会放入发布的 `.app`；日常使用不需要 Python。
 
 2026-09-17 已在 Windows PowerShell 5.1 / Codex CLI 0.154.0 下验证公开包：12 组 PowerShell/WPF 回归通过；三路由共享会话集成测试的 9 次本地模拟请求通过；PowerShell 语法及发布清单检查通过。真实浏览器授权、不同机器的桌面启动和真实服务连接仍需用户验收。官方客户端更新可能改变认证或配置格式；请先备份再升级。
 

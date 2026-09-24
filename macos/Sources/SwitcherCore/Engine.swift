@@ -1,5 +1,10 @@
 import Foundation
 
+struct CatalogUpdate: Codable {
+    let previous: Data?
+    let next: Data
+}
+
 struct Journal: Codable {
     var version = 1
     let previous: Registry
@@ -7,6 +12,8 @@ struct Journal: Codable {
     let oldConfig: Data?
     let newAuth: Data
     let newConfig: Data
+    // Optional so pending recovery records from v0.2.0 remain readable.
+    var catalogUpdate: CatalogUpdate? = nil
 }
 
 public final class SwitcherEngine {
@@ -21,6 +28,7 @@ public final class SwitcherEngine {
     }
     private var authURL: URL { home.appendingPathComponent("auth.json") }
     private var configURL: URL { home.appendingPathComponent("config.toml") }
+    private var catalogURL: URL { vault.root.appendingPathComponent("api-models.json") }
     private func locked<T>(_ operation: () throws -> T) throws -> T {
         let lock = try OperationLock(directory: vault.root)
         return try withExtendedLifetime(lock) { try operation() }
@@ -119,7 +127,8 @@ public final class SwitcherEngine {
                     throw SwitcherError.message("只能编辑非活动 API 配置档。请先切换到其他账号。")
                 }
                 let auth = key.isEmpty ? registry.profiles[index].auth : try Credential.api(key)
-                registry.profiles[index] = try Profile(id: id, name: name, auth: auth, route: route)
+                let preserved = ConfigEditor.preservingCatalog(route, from: registry.profiles[index].route)
+                registry.profiles[index] = try Profile(id: id, name: name, auth: auth, route: preserved)
             } else { registry.profiles.append(try Profile(name: name, auth: Credential.api(key), route: route)) }
             try registry.validate(); try vault.save(registry, name: "profiles.enc")
         }
@@ -154,8 +163,21 @@ public final class SwitcherEngine {
             guard let target = registry.profiles.first(where: { $0.id == id }) else { throw SwitcherError.message("配置档不存在。") }
             try target.validate()
             let oldAuth = try PrivateFiles.read(authURL), oldConfig = try PrivateFiles.read(configURL)
-            let newConfig = Data(try ConfigEditor.applying(target.route, to: configText(oldConfig)).utf8)
-            let journal = Journal(previous: registry, oldAuth: oldAuth, oldConfig: oldConfig, newAuth: target.auth, newConfig: newConfig)
+            var route = target.route
+            var update: CatalogUpdate?
+            if target.kind == .responsesAPI {
+                let configured = try ConfigEditor.catalog(route)
+                // Leave explicit user catalogs alone, even if the cache is newer.
+                if configured == nil || configured == catalogURL.path {
+                    let previous = try PrivateFiles.read(catalogURL)
+                    let cache = try? PrivateFiles.read(home.appendingPathComponent("models_cache.json"))
+                    let next = ModelCatalog.validated(cache) ?? ModelCatalog.validated(previous)
+                    route = try ConfigEditor.withCatalog(route, path: next == nil ? nil : catalogURL.path)
+                    if let next, next != previous { update = CatalogUpdate(previous: previous, next: next) }
+                }
+            }
+            let newConfig = Data(try ConfigEditor.applying(route, to: configText(oldConfig)).utf8)
+            let journal = Journal(previous: registry, oldAuth: oldAuth, oldConfig: oldConfig, newAuth: target.auth, newConfig: newConfig, catalogUpdate: update)
             // Explicit first-use takeover can replace a stale file while Codex used
             // Keychain/auto. Keep the original file/config encrypted, even on success.
             if firstTakeover, try PrivateFiles.read(vault.root.appendingPathComponent("first-login-backup.enc")) == nil {
@@ -168,6 +190,11 @@ public final class SwitcherEngine {
                 guard try PrivateFiles.read(authURL) == oldAuth, try PrivateFiles.read(configURL) == oldConfig else {
                     throw SwitcherError.message("登录或配置被其他程序修改，已停止切换。")
                 }
+                if let update {
+                    guard try PrivateFiles.read(catalogURL) == update.previous else { throw SwitcherError.message("模型目录被其他程序修改，已停止切换。") }
+                    try PrivateFiles.write(update.next, to: catalogURL)
+                    try checkpoint("catalog")
+                }
                 try PrivateFiles.write(newConfig, to: configURL)
                 try checkpoint("config")
                 try PrivateFiles.write(target.auth, to: authURL)
@@ -175,6 +202,7 @@ public final class SwitcherEngine {
                 guard try PrivateFiles.read(authURL) == target.auth, try PrivateFiles.read(configURL) == newConfig else {
                     throw SwitcherError.message("切换后文件校验失败。")
                 }
+                if let update, try PrivateFiles.read(catalogURL) != update.next { throw SwitcherError.message("模型目录写入校验失败。") }
                 registry.activeID = id
                 try vault.save(registry, name: "profiles.enc")
                 try checkpoint("registry")
@@ -195,6 +223,11 @@ public final class SwitcherEngine {
         let auth = try PrivateFiles.read(authURL), config = try PrivateFiles.read(configURL)
         guard (auth == record.oldAuth || auth == record.newAuth), (config == record.oldConfig || config == record.newConfig) else {
             throw SwitcherError.message("中断后登录或配置被外部修改，拒绝覆盖。请备份账号库和 .codex 后人工排查。")
+        }
+        if let update = record.catalogUpdate {
+            let current = try PrivateFiles.read(catalogURL)
+            guard current == update.previous || current == update.next else { throw SwitcherError.message("中断后模型目录被外部修改，拒绝覆盖。") }
+            if let previous = update.previous { try PrivateFiles.write(previous, to: catalogURL) } else { try PrivateFiles.remove(catalogURL) }
         }
         if let data = record.oldConfig { try PrivateFiles.write(data, to: configURL) } else { try PrivateFiles.remove(configURL) }
         if let data = record.oldAuth { try PrivateFiles.write(data, to: authURL) } else { try PrivateFiles.remove(authURL) }

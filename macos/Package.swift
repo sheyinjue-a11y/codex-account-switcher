@@ -4,10 +4,14 @@ import PackageDescription
 let package = Package(
     name: "CodexAccountSwitcher",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "CodexAccountSwitcher", targets: ["SwitcherApp"])],
+    products: [
+        .executable(name: "CodexAccountSwitcher", targets: ["SwitcherApp"]),
+        .executable(name: "WarmupFixture", targets: ["WarmupFixture"])
+    ],
     targets: [
         .target(name: "SwitcherCore"),
         .executableTarget(name: "SwitcherApp", dependencies: ["SwitcherCore"]),
-        .testTarget(name: "SwitcherCoreTests", dependencies: ["SwitcherCore"])
+        .testTarget(name: "SwitcherCoreTests", dependencies: ["SwitcherCore"]),
+        .executableTarget(name: "WarmupFixture", dependencies: ["SwitcherCore"], path: "Tests/Fixtures/WarmupFixture")
     ]
 )
