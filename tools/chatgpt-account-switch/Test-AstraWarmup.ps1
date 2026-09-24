@@ -66,7 +66,7 @@ $scriptPath=Join-Path $PSScriptRoot 'Invoke-AstraWarmup.ps1'
 $listener=$null
 $server=$null
 $savedEnvironment=@{}
-foreach ($name in @('CODEX_HOME','OPENAI_BASE_URL','OPENAI_API_KEY','CODEX_API_KEY')) {
+foreach ($name in @('CODEX_HOME','OPENAI_BASE_URL','OPENAI_API_KEY','CODEX_API_KEY','CODEX_APP_SERVER_OPENAI_BASE_URL')) {
     $savedEnvironment[$name]=[Environment]::GetEnvironmentVariable($name,'Process')
     [Environment]::SetEnvironmentVariable($name,$null,'Process')
 }
@@ -131,6 +131,12 @@ try {
     Check ($null -eq (Invoke-AstraWarmup -HomePath $homePath -VaultPath $vaultPath -Event ([pscustomobject]@{hook_event_name='UserPromptSubmit';session_id='other';model='gpt-6-sol'}))) 'Non-Astra prompt causes no warmup.'
     Check ($null -eq (Invoke-AstraWarmup -HomePath $homePath -VaultPath $vaultPath -Event ([pscustomobject]@{hook_event_name='OtherEvent';session_id='other';model='gpt-6-astra'}))) 'Other hook event causes no warmup.'
     Check ((Invoke-AstraWarmup -HomePath $homePath -VaultPath $vaultPath -Event ([pscustomobject]@{hook_event_name='UserPromptSubmit';session_id='../bad';model='gpt-6-astra'})).decision -ceq 'block') 'Malformed session metadata blocks the original turn.'
+    $env:CODEX_APP_SERVER_OPENAI_BASE_URL='https://elsewhere.example.test/v1'
+    $differentRoute=[pscustomobject]@{hook_event_name='UserPromptSubmit';session_id='different-route';model='gpt-6-astra'}
+    Check ((Invoke-AstraWarmup -HomePath $homePath -VaultPath $vaultPath -Event $differentRoute).decision -ceq 'block') 'Different app-server route override blocks before warmup.'
+    $env:CODEX_APP_SERVER_OPENAI_BASE_URL="http://127.0.0.1:$port/v1/"
+    Check ($null -eq (Invoke-AstraWarmup -HomePath $homePath -VaultPath $vaultPath -Event $event)) 'Matching app-server route override permits the configured endpoint.'
+    Remove-Item Env:CODEX_APP_SERVER_OPENAI_BASE_URL
     Check (-not (Test-AstraResponse ([Text.Encoding]::UTF8.GetBytes('event: response.incomplete'+"`n"+'data: {"type":"response.incomplete"}'+"`n`n")) 'text/event-stream')) 'Incomplete SSE never marks success.'
     Check (-not (Test-AstraResponse ([Text.Encoding]::UTF8.GetBytes('event: error'+"`n"+'data: {"message":"PRIVATE_ORIGINAL_SENTINEL"}'+"`n`n")) 'text/event-stream')) 'Error SSE never marks success.'
     Check (-not (Test-AstraResponse ([Text.Encoding]::UTF8.GetBytes('{"status":"incomplete"}')) 'application/json')) 'Incomplete JSON never marks success.'

@@ -199,7 +199,7 @@ public enum AstraWarmup {
             let settings = try readConsent(root: root)
             if settings.profiles.isEmpty { return nil }
             guard let account = try readAccount(home: home), settings.profiles.contains(account.fingerprint) else { return nil }
-            if hasEnvironmentOverride(home: home) { return blockData }
+            if hasEnvironmentOverride(home: home, endpoint: account.endpoint) { return blockData }
             guard let session = object["session_id"] as? String,
                   session.range(of: #"^[A-Za-z0-9_-]{1,128}$"#, options: .regularExpression) != nil else { return blockData }
             let directory = root.appendingPathComponent("astra-warmup-sessions")
@@ -228,7 +228,7 @@ public enum AstraWarmup {
         } catch { return blockData }
     }
 
-    private static func hasEnvironmentOverride(home: URL) -> Bool {
+    private static func hasEnvironmentOverride(home: URL, endpoint: String) -> Bool {
         let env = ProcessInfo.processInfo.environment
         for name in ["OPENAI_BASE_URL", "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN",
                      "CODEX_AUTH_JSON", "CODEX_PROFILE", "CODEX_SQLITE_HOME"] {
@@ -236,6 +236,8 @@ public enum AstraWarmup {
         }
         if let configured = env["CODEX_HOME"], !configured.isEmpty,
            URL(fileURLWithPath: configured).standardizedFileURL.path != home.standardizedFileURL.path { return true }
+        if let override = env["CODEX_APP_SERVER_OPENAI_BASE_URL"], !override.isEmpty,
+           override.trimmingCharacters(in: CharacterSet(charactersIn: "/")) != endpoint { return true }
         return false
     }
 

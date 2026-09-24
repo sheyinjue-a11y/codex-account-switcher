@@ -6,9 +6,11 @@ let env = ProcessInfo.processInfo.environment
 guard let homePath = env["WARMUP_FIXTURE_HOME"], let rootPath = env["WARMUP_FIXTURE_ROOT"],
       let physicalTemp = realpath(FileManager.default.temporaryDirectory.path, nil) else { exit(2) }
 defer { free(physicalTemp) }
-let temporary = URL(fileURLWithPath: String(cString: physicalTemp)).standardizedFileURL
-let home = URL(fileURLWithPath: homePath).standardizedFileURL
-let root = URL(fileURLWithPath: rootPath).standardizedFileURL
+// Preserve the physical /private/var prefix supplied by the integration
+// harness. standardizedFileURL can reintroduce macOS's /var symlink alias.
+let temporary = URL(fileURLWithPath: String(cString: physicalTemp))
+let home = URL(fileURLWithPath: homePath)
+let root = URL(fileURLWithPath: rootPath)
 let parent = home.deletingLastPathComponent()
 guard parent == root.deletingLastPathComponent(), parent.deletingLastPathComponent() == temporary,
       parent.lastPathComponent.hasPrefix("astra-warmup-integration-"),

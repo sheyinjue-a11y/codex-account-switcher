@@ -329,6 +329,7 @@ function Invoke-AstraWarmup {
         if ($null -eq $account -or @($consent.profiles | Where-Object { $_ -ceq $account.Fingerprint }).Count -eq 0) { return $null }
         if ($env:OPENAI_BASE_URL -or $env:OPENAI_API_KEY -or $env:CODEX_API_KEY) { return $block }
         if ($env:CODEX_HOME -and [IO.Path]::GetFullPath($env:CODEX_HOME) -ine [IO.Path]::GetFullPath($HomePath)) { return $block }
+        if ($env:CODEX_APP_SERVER_OPENAI_BASE_URL -and $env:CODEX_APP_SERVER_OPENAI_BASE_URL.TrimEnd('/') -cne $account.Endpoint) { return $block }
         $session=Get-AstraProperty $Event 'session_id'
         if ($session -isnot [string] -or $session -cnotmatch '^[A-Za-z0-9_-]{1,128}$') { return $block }
         $vault=Assert-AstraPath $VaultPath

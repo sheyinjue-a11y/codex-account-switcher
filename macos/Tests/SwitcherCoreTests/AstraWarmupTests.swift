@@ -98,6 +98,35 @@ final class AstraWarmupTests: XCTestCase {
         XCTAssertEqual(try markerCount(), 0)
     }
 
+    func testDifferentAppServerRouteOverrideBlocksBeforeNetwork() throws {
+        try enable()
+        let name = "CODEX_APP_SERVER_OPENAI_BASE_URL"
+        let previous = getenv(name).map { String(cString: $0) }
+        defer { if let previous { setenv(name, previous, 1) } else { unsetenv(name) } }
+        setenv(name, "https://elsewhere.example.test/v1", 1)
+        var requests = 0
+        let transport: AstraWarmup.Transport = { _ in
+            requests += 1
+            return (200, "application/json", Data(#"{"status":"completed"}"#.utf8))
+        }
+        XCTAssertEqual(String(decoding: try XCTUnwrap(AstraWarmup.run(event: event(), home: home, root: root, transport: transport)), as: UTF8.self), block)
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(try markerCount(), 0)
+    }
+
+    func testMatchingAppServerRouteOverrideAllowsWarmup() throws {
+        try enable()
+        let name = "CODEX_APP_SERVER_OPENAI_BASE_URL"
+        let previous = getenv(name).map { String(cString: $0) }
+        defer { if let previous { setenv(name, previous, 1) } else { unsetenv(name) } }
+        setenv(name, endpoint + "/", 1)
+        let transport: AstraWarmup.Transport = { _ in
+            (200, "application/json", Data(#"{"status":"completed"}"#.utf8))
+        }
+        XCTAssertNil(AstraWarmup.run(event: event(), home: home, root: root, transport: transport))
+        XCTAssertEqual(try markerCount(), 1)
+    }
+
     func testEnablePreservesUnrelatedEmptyHookGroupAndDisableRemovesOnlyOwnedHandler() throws {
         let hooks = #"{"hooks":{"UserPromptSubmit":[{"matcher":"keep-empty","hooks":[],"unknown":42},{"matcher":"keep-other","hooks":[{"type":"command","command":"/bin/true"}]}],"OtherEvent":[{"hooks":[]}]}}"#
         try PrivateFiles.write(Data(hooks.utf8), to: home.appendingPathComponent("hooks.json"))
