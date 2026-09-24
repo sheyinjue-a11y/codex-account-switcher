@@ -57,6 +57,8 @@ Check ($null -eq $result) 'A completed Sol response releases the original turn.'
 
 **Interfaces:** `public enum AstraWarmup` exposes `run(event: Data, home: URL, root: URL) -> Data?`, `setEnabled(_ enabled: Bool, home: URL, root: URL, executable: URL, consent: Bool) throws`, `isEnabled(home: URL, root: URL) throws -> Bool`. Native URLSession transport has dependency injection at the HTTP boundary for offline tests and rejects redirects. Use existing PrivateFiles safeguards, never Keychain prompt in the hook. Settings opt-in is explicit and defaults off; do not change saved profile/auth schemas.
 
+**Safety parity clarified during implementation:** Permit `CODEX_APP_SERVER_OPENAI_BASE_URL` only when it matches the validated configured endpoint; block differing overrides. Reject shell-expanding characters in installed and prior-owned hook paths before editing hooks; ordinary spaces and Unicode remain supported. Task 2 also owns the narrow corresponding guards and regressions in Windows `AstraWarmup.ps1` / `Test-AstraWarmup.ps1`. Use inert paths in tests, never execute injected commands. The Mac fixture must retain physical temporary paths without standardizing `/private/var` back to the `/var` symlink; do not weaken private-file checks.
+
 - [ ] Write XCTest fixtures matching the same behavioral protocol, proving no Sol request contains the original message and no completion marker is set on errors. Run on Mac CI to capture initial failure before implementation.
 
 ```swift
