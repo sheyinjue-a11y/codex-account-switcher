@@ -213,6 +213,12 @@ try {
     New-Item -ItemType Directory -Path $freshHome | Out-Null
     [IO.File]::WriteAllText((Join-Path $freshHome 'auth.json'),'{"auth_mode":"apikey","OPENAI_API_KEY":"FAKE_FRESH_KEY_LOCAL_TEST_ONLY"}')
     [IO.File]::WriteAllText((Join-Path $freshHome 'config.toml'),"model_provider = `"openai`"`ncli_auth_credentials_store = `"file`"`n")
+    foreach ($component in @('$fake','`id`','%INJECT%','!INJECT!','^escape')) {
+        $unsafePath=Join-Path $testRoot (Join-Path $component 'tools\chatgpt-account-switch\Invoke-AstraWarmup.ps1')
+        New-Item -ItemType Directory -Path (Split-Path -Parent $unsafePath) -Force | Out-Null
+        [IO.File]::WriteAllText($unsafePath,'# inert test fixture')
+        Reject { Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $unsafePath -Enabled $true -ConfirmCost $true } "Unsafe hook path component $component is rejected."
+    }
     Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
     Check ((Get-Acl -LiteralPath $freshVault).AreAccessRulesProtected) 'New warmup vault has private, non-inherited access rules.'
     $freshHooksPath=Join-Path $freshHome 'hooks.json'
@@ -232,6 +238,10 @@ try {
     Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $true -ConfirmCost $true
     $freshHooks=[IO.File]::ReadAllText($freshHooksPath) | ConvertFrom-Json
     Check ($freshHooks.hooks.UserPromptSubmit.Count -eq 2 -and $freshHooks.hooks.UserPromptSubmit[0].matcher -ceq 'keep-empty' -and $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command -cne $oldCommand) 'Re-enable replaces a moved release command without duplicating the handler.'
+    $badOldCommand='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\%INJECT%\tools\chatgpt-account-switch\Invoke-AstraWarmup.ps1"'
+    $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command=$badOldCommand
+    [IO.File]::WriteAllText($freshHooksPath,($freshHooks | ConvertTo-Json -Depth 20))
+    Reject { Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $false -ConfirmCost $false } 'Unsafe moved release handler is not treated as owned.'
     $freshHooks.hooks.UserPromptSubmit[1].hooks[0].command=$oldCommand
     [IO.File]::WriteAllText($freshHooksPath,($freshHooks | ConvertTo-Json -Depth 20))
     Set-AstraWarmupEnabled -HomePath $freshHome -VaultPath $freshVault -HookScriptPath $scriptPath -Enabled $false -ConfirmCost $false

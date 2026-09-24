@@ -164,7 +164,7 @@ function Test-AstraOwnedHandler($Handler,[string]$HookScriptPath) {
     if ((Get-AstraProperty $Handler 'type') -cne 'command' -or $command -isnot [string] -or
         -not $command.StartsWith($prefix,[StringComparison]::Ordinal) -or -not $command.EndsWith('"',[StringComparison]::Ordinal)) { throw 'A conflicting Astra warmup handler exists.' }
     $target=$command.Substring($prefix.Length,$command.Length-$prefix.Length-1)
-    if ($target.Contains('"') -or $target -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+\\)') { throw 'A conflicting Astra warmup handler exists.' }
+    if ($target -cmatch '["$`%!^]' -or $target -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+\\)') { throw 'A conflicting Astra warmup handler exists.' }
     try {
         $full=[IO.Path]::GetFullPath($target)
         $folder=[IO.Path]::GetDirectoryName($full)
@@ -229,6 +229,7 @@ function Set-AstraWarmupEnabled {
     $vault=Assert-AstraPath $VaultPath -AllowMissingLeaf
     $scriptPath=Assert-AstraPath $HookScriptPath
     if ([IO.Path]::GetExtension($scriptPath) -cne '.ps1' -or (Split-Path -Leaf $scriptPath) -cne 'Invoke-AstraWarmup.ps1') { throw 'Invalid warmup hook path.' }
+    if ($scriptPath -cmatch '["$`%!^]') { throw 'Unsafe warmup hook path.' }
     if ($Enabled -and -not $ConfirmCost) { throw 'Explicit warmup cost confirmation is required.' }
     $account=Get-AstraCurrentAccount $canonicalHome
     if ($null -eq $account) { throw 'Select a file API login before configuring warmup.' }

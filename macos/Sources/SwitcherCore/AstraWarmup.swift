@@ -9,6 +9,7 @@ public enum AstraWarmup {
     private static let blockData = Data(#"{"decision":"block","reason":"Astra warmup failed; original message was not sent. Retry or disable warmup."}"#.utf8)
     private static let consentName = "astra-warmup.json"
     private static let maximumResponse = 131_072
+    private static let unsafeCommandPath = CharacterSet(charactersIn: "\"$`\\").union(.controlCharacters)
 
     private struct Account {
         let endpoint: String
@@ -83,8 +84,9 @@ public enum AstraWarmup {
 
     public static func setEnabled(_ enabled: Bool, home: URL, root: URL, executable: URL, consent: Bool) throws {
         guard !enabled || consent else { throw SwitcherError.message("Confirm the API cost before enabling Astra warmup.") }
-        guard executable.isFileURL, executable.path.hasPrefix("/"), !executable.path.contains("\""),
-              !executable.path.contains("\n"), ["CodexAccountSwitcher", "WarmupFixture"].contains(executable.lastPathComponent) else {
+        guard executable.isFileURL, executable.path.hasPrefix("/"),
+              executable.path.rangeOfCharacter(from: unsafeCommandPath) == nil,
+              ["CodexAccountSwitcher", "WarmupFixture"].contains(executable.lastPathComponent) else {
             throw SwitcherError.message("Invalid Astra warmup executable.")
         }
         guard let account = try readAccount(home: home) else {
@@ -127,7 +129,7 @@ public enum AstraWarmup {
             throw SwitcherError.message("A conflicting Astra warmup hook exists.")
         }
         let path = String(command.dropFirst().dropLast("\" --astra-warmup".count))
-        guard path.hasPrefix("/"), !path.contains("\""), !path.contains("\n"),
+        guard path.hasPrefix("/"), path.rangeOfCharacter(from: unsafeCommandPath) == nil,
               ["CodexAccountSwitcher", "WarmupFixture"].contains(URL(fileURLWithPath: path).lastPathComponent) else {
             throw SwitcherError.message("A conflicting Astra warmup hook exists.")
         }
