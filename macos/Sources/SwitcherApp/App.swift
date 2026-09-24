@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import SwitcherCore
+import Darwin
 
 enum Theme {
     static let navy = Color(red: 0.09, green: 0.21, blue: 0.35)
@@ -16,6 +17,7 @@ enum Theme {
     @Published var busy = false
     @Published var loggingIn = false
     @Published var pending = false
+    @Published var warmupEnabled = false
     @Published var message = ""
     @Published var errorText = ""
     @Published var form: FormMode?
@@ -53,6 +55,7 @@ enum Theme {
         do {
             let status = try engine.status()
             profiles = status.profiles; activeID = status.activeID; pending = try engine.hasPending()
+            warmupEnabled = try AstraWarmup.isEnabled(home: home, root: root)
         } catch { errorText = error.localizedDescription }
     }
     func confirm(_ title: String, _ detail: String, action: String) -> Bool {
@@ -129,6 +132,17 @@ enum Theme {
             UserDefaults.standard.set(url.path, forKey: "codexCLIPath")
             message = "已设置登录组件。只选择从 OpenAI 官方来源安装的程序。"
         }
+    }
+    func toggleAstraWarmup() {
+        guard let current = profiles.first(where: { $0.id == activeID }), current.kind == .responsesAPI,
+              let executable = Bundle.main.executableURL else { return }
+        let enabling = !warmupEnabled
+        if enabling && !confirm("开启 Astra 首条消息预热？",
+                                "每个会话首次发送到 gpt-6-astra 前，会用当前 API 地址和 Key 向 gpt-5.6-sol 发送固定消息「Reply only OK.」，这可能产生费用。原始消息不会发送给 Sol。Codex 会要求你另行审查并信任新安装的 hook。",
+                                action: "同意费用并开启") { return }
+        perform({ [home, root] in
+            try AstraWarmup.setEnabled(enabling, home: home, root: root, executable: executable, consent: enabling)
+        }, success: enabling ? "Astra 预热已开启；请在 Codex 中审查并信任 hook。" : "当前 API 的 Astra 预热已关闭。")
     }
 }
 
@@ -289,6 +303,9 @@ struct PickerView: View {
                 Button("重命名") { model.form = FormMode(kind: .rename, profile: profile) }
                 if profile.kind == .responsesAPI {
                     Button("编辑 API") { model.form = FormMode(kind: .api, profile: profile) }.disabled(model.activeID == profile.id)
+                    if model.activeID == profile.id {
+                        Button(model.warmupEnabled ? "关闭 Astra 首条消息预热" : "开启 Astra 首条消息预热…", action: model.toggleAstraWarmup)
+                    }
                 } else {
                     Button("重新登录") { model.login(profile.name, replacing: profile.id) }.disabled(model.activeID == profile.id)
                 }
@@ -338,12 +355,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main struct SwitcherApplication: App {
+struct SwitcherApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @MainActor static let sharedModel = SwitcherModel(preview: ProcessInfo.processInfo.arguments.contains("--render-preview"))
     var body: some Scene {
         WindowGroup("Codex Account Switcher") { PickerView(model: Self.sharedModel) }
             .windowResizability(.contentMinSize)
             .commands { CommandGroup(replacing: .newItem) {} }
+    }
+}
+
+@main enum SwitcherMain {
+    static func main() {
+        if ProcessInfo.processInfo.arguments.contains("--astra-warmup") {
+            let event = FileHandle.standardInput.readDataToEndOfFile()
+            if let result = AstraWarmup.run(event: event,
+                                            home: FileManager.default.homeDirectoryForCurrentUser.resolvingSymlinksInPath().appendingPathComponent(".codex"),
+                                            root: FileManager.default.homeDirectoryForCurrentUser.resolvingSymlinksInPath().appendingPathComponent("Library/Application Support/CodexAccountSwitcher")) {
+                FileHandle.standardOutput.write(result)
+            }
+            exit(0)
+        }
+        SwitcherApplication.main()
     }
 }
