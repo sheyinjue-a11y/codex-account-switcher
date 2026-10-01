@@ -45,6 +45,18 @@ public final class SwitcherEngine {
     }
     public func status() throws -> Registry { try locked { try readRegistry() } }
     public func hasPending() throws -> Bool { try locked { try PrivateFiles.read(vault.root.appendingPathComponent("pending.enc")) != nil } }
+    // Refresh existing snapshots only. Initial binding belongs to activation.
+    // Pending recovery owns the catalog bytes; startup never changes auth/config.
+    @discardableResult public func refreshModelCatalog() -> Bool {
+        (try? locked {
+            try noPending()
+            guard let previous = try PrivateFiles.read(catalogURL),
+                  let next = ModelCatalog.validated(try PrivateFiles.read(home.appendingPathComponent("models_cache.json"))),
+                  next != ModelCatalog.validated(previous) else { return false }
+            try PrivateFiles.write(next, to: catalogURL)
+            return true
+        }) ?? false
+    }
     private func configText(_ data: Data?) throws -> String {
         guard let data else { return "" }
         guard let text = String(data: data, encoding: .utf8) else { throw SwitcherError.message("config.toml 不是 UTF-8；未修改配置。") }

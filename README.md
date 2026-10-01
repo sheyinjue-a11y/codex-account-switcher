@@ -6,7 +6,7 @@
   <a href="#快速开始"><img src="https://img.shields.io/badge/Windows-PowerShell_5.1-2867C7?style=flat-square" alt="Windows · PowerShell 5.1"></a>
   <a href="macos/README.md"><img src="https://img.shields.io/badge/macOS-Native_SwiftUI-318E83?style=flat-square" alt="macOS · 原生 SwiftUI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-318E83?style=flat-square" alt="MIT 许可证"></a>
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/v0.2.0-公开预览版-526B86?style=flat-square" alt="v0.2.0 公开预览版"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.3.1"><img src="https://img.shields.io/badge/v0.3.1-公开预览版-526B86?style=flat-square" alt="v0.3.1 公开预览版"></a>
   <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml"><img src="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml/badge.svg" alt="Windows 离线测试"></a>
 </p>
 
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.2.0"><strong>↓ 下载 Windows / macOS</strong></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.3.1"><strong>↓ 下载 Windows / macOS</strong></a>
   &nbsp; · &nbsp; <a href="#快速开始">快速开始</a>
   &nbsp; · &nbsp; <a href="#界面预览">看看界面</a>
   &nbsp; · &nbsp; <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases">更新记录</a>
@@ -91,7 +91,11 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 
 ### 模型列表随官方目录更新
 
-激活 API 配置档时，两端会读取本机 Codex 已刷新的 `models_cache.json`，在切换器账号库中生成 `api-models.json`，通过 `model_catalog_json` 交给 Codex 使用。目录中已有的 GPT-6 Astra、GPT-6 Sol、GPT-6 Luna 会保留完整元数据；后续新增、改名或移除的模型也在下次激活 API 档时同步，无需逐个修改切换器代码。
+激活 API 配置档时，两端会读取本机 Codex 已刷新的 `models_cache.json`，在切换器账号库中生成 `api-models.json`（Windows 旧实验室档沿用 `lab-models.json`），通过 `model_catalog_json` 交给 Codex 使用。包括 `gpt-6.1-sol` 在内的缓存模型均保留完整元数据；后续新增、改名或移除的模型也在下次激活 API 档时同步，无需逐个修改切换器代码。内容未变时不重复写入。
+
+打开切换器时也会刷新已有的托管目录，不切换账号、不改当前模型；目录首次绑定仍在激活 API 档时完成。缓存损坏、切换器忙或存在未完成恢复时跳过刷新，保留原数据。
+
+更新 Codex 后：让官方客户端完成模型缓存刷新 → 打开切换器 → 下次启动 Codex 使用新目录。已打开的模型菜单可能需要重启才会更新。不会自动把当前模型改为 6.1；请在 Codex 模型菜单选择。详见[自动更新设计](docs/superpowers/plans/2026-10-01-model-catalog-refresh.md)。
 
 这不是联网查询所有模型或承诺即时更新：需要官方 Codex 先取得新目录，运行中的窗口可能需要重开。缓存缺失或损坏时使用上次有效目录；没有有效目录则不添加覆盖项。若一直使用 API 登录且本地目录未更新，可先用官方账号登录 Codex 刷新目录，再切回 API 档。不会伪造模型、把隐藏模型强制显示或保证服务商有对应权限。显式配置的自定义模型目录和 API 档已选模型会保留，官方缓存和工作区不会被改写。
 

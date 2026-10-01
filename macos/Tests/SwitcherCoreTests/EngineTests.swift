@@ -145,11 +145,49 @@ final class EngineTests: XCTestCase {
             try engine.activate(api.id)
             XCTAssertEqual(try PrivateFiles.read(snapshot), catalog)
         }
-        try PrivateFiles.write(catalogFixture(["future-model"]), to: cache)
+        let updated = try catalogFixture(["gpt-6.1-sol", "future-model", "hidden-model"])
+        try PrivateFiles.write(updated, to: cache)
         try engine.activate(api.id)
+        XCTAssertEqual(try PrivateFiles.read(snapshot), ModelCatalog.validated(updated))
+        XCTAssertTrue(try String(contentsOf: home.appendingPathComponent("config.toml"), encoding: .utf8).contains("model = \"gpt-6-luna\""))
         XCTAssertTrue(try String(contentsOf: snapshot, encoding: .utf8).contains("future-model"))
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: stamp], ofItemAtPath: snapshot.path)
+        try engine.activate(api.id)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: snapshot.path)[.modificationDate] as? Date, stamp)
         try engine.activate(ids.0)
         XCTAssertFalse(try String(contentsOf: home.appendingPathComponent("config.toml"), encoding: .utf8).contains("model_catalog_json"))
+    }
+    func testPickerRefreshAddsSol61WithoutSwitchingAndDefersPendingRecovery() throws {
+        _ = try seed()
+        let snapshot = vault.root.appendingPathComponent("api-models.json")
+        let cache = home.appendingPathComponent("models_cache.json")
+        let fresh = try catalogFixture(["gpt-6.1-sol", "future-model", "hidden-model"])
+        try PrivateFiles.write(fresh, to: cache)
+        XCTAssertFalse(engine.refreshModelCatalog())
+        try PrivateFiles.write(catalogFixture(), to: snapshot)
+        let protected = [home.appendingPathComponent("auth.json"), home.appendingPathComponent("config.toml"), vault.root.appendingPathComponent("profiles.enc")]
+        let before = try protected.map { try PrivateFiles.read($0) }
+        XCTAssertTrue(engine.refreshModelCatalog())
+        XCTAssertEqual(try PrivateFiles.read(snapshot), ModelCatalog.validated(fresh))
+        XCTAssertEqual(try protected.map { try PrivateFiles.read($0) }, before)
+        XCTAssertEqual(try PrivateFiles.read(cache), fresh)
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: stamp], ofItemAtPath: snapshot.path)
+        XCTAssertFalse(engine.refreshModelCatalog())
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: snapshot.path)[.modificationDate] as? Date, stamp)
+        for invalid in ["{broken", "{\"models\":[]}"] {
+            try PrivateFiles.write(Data(invalid.utf8), to: cache)
+            XCTAssertFalse(engine.refreshModelCatalog())
+            XCTAssertEqual(try PrivateFiles.read(snapshot), ModelCatalog.validated(fresh))
+        }
+        try PrivateFiles.write(catalogFixture(["later-model"]), to: cache)
+        try PrivateFiles.write(Data("FAKE pending recovery".utf8), to: vault.root.appendingPathComponent("pending.enc"))
+        XCTAssertFalse(engine.refreshModelCatalog())
+        XCTAssertEqual(try PrivateFiles.read(snapshot), ModelCatalog.validated(fresh))
+        try PrivateFiles.remove(vault.root.appendingPathComponent("pending.enc"))
+        XCTAssertTrue(engine.refreshModelCatalog())
+        XCTAssertTrue(try String(contentsOf: snapshot, encoding: .utf8).contains("later-model"))
     }
     func testAPICatalogRollbackAtEveryWriteBoundary() throws {
         let ids = try seed()

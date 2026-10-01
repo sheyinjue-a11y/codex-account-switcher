@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::SetIn((New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding($false,$true)), $true)))
 function Get-SafeFailure([string]$Detail) {
     switch -Regex ($Detail) {
+        'environment override|default shared Codex home' { return '启动被环境变量覆盖阻止。请移除用户/系统中的自定义 CODEX_HOME、CODEX_SQLITE_HOME 或 API 认证/地址变量，注销 Windows 后重试。现有账号和聊天数据仍保留。' }
         'cancel' { return '登录已取消。可以重新添加或登录。' }
         'Running:|requires all ChatGPT|processes to exit|Close all ChatGPT' { return '请退出 ChatGPT、Codex CLI 和 VS Code 中的 Codex，然后重试。' }
         'Profile switched|launch|executable' { return '配置档可能已切换，但应用未能启动。请修复后重试同一配置档。' }
@@ -36,7 +37,7 @@ try {
     if ($TestSettings) { $arguments.TestSettings = $TestSettings }
     $response = @{ success = $true; message = '操作已完成。' }
     if ($Action -eq 'List') {
-        $raw = & $SwitcherPath -StatusJson @arguments 3>$null 4>$null 5>$null 6>$null
+        $raw = & $SwitcherPath -StatusJson -RefreshModelCatalog @arguments 3>$null 4>$null 5>$null 6>$null
         $status = ($raw -join [Environment]::NewLine) | ConvertFrom-Json
         $profiles = @($status.profiles | ForEach-Object {
             $item = @{}

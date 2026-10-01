@@ -52,6 +52,7 @@ enum Theme {
     }
     func reload() {
         guard let engine, !preview else { return }
+        engine.refreshModelCatalog()
         do {
             let status = try engine.status()
             profiles = status.profiles; activeID = status.activeID; pending = try engine.hasPending()

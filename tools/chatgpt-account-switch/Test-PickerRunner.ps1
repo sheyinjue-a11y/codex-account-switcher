@@ -21,8 +21,9 @@ try {
     $null = New-Item -ItemType Directory -Path $root
     $fake = Join-Path $root 'fake switcher.ps1'
     [IO.File]::WriteAllText($fake, @'
-param([string]$ProfileId, [switch]$Initialize, [switch]$StatusJson, [switch]$ManageStdin)
+param([string]$ProfileId, [switch]$Initialize, [switch]$StatusJson, [switch]$ManageStdin, [switch]$RefreshModelCatalog)
 if ($StatusJson) {
+    if (-not $RefreshModelCatalog) { throw 'Picker List must request the model refresh.' }
     @{registrySchema=2;activeProfileId='personal';apiKey='fake-secret-key';profiles=@(@{id='personal';displayName='Personal';kind='chatgpt';sortOrder=0;status='ready';host='';model='';apiKey='fake-secret-key'})} | ConvertTo-Json -Depth 6
     return
 }

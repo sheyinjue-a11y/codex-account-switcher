@@ -1,4 +1,4 @@
-[CmdletBinding(DefaultParameterSetName = 'Switch')]
+﻿[CmdletBinding(DefaultParameterSetName = 'Switch')]
 param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Switch')]
     [Alias('Profile')][string]$ProfileId,
@@ -10,6 +10,7 @@ param(
     [switch]$Status,
 
     [Parameter(Mandatory = $true, ParameterSetName = 'StatusJson')][switch]$StatusJson,
+    [Parameter(ParameterSetName = 'StatusJson')][switch]$RefreshModelCatalog,
     [Parameter(Mandatory = $true, ParameterSetName = 'Manage')][switch]$ManageStdin,
     [Parameter(Mandatory = $true, ParameterSetName = 'Load')][switch]$LoadOnly,
 
@@ -580,28 +581,125 @@ function Get-ChatGPTExecutable {
     return $executable
 }
 
+function Get-ChatGPTAppUserModelId {
+    $package = Get-AppxPackage -Name 'OpenAI.Codex' | Sort-Object Version -Descending | Select-Object -First 1
+    if (-not $package) { throw 'OpenAI.Codex desktop executable is not installed.' }
+    [xml]$manifest = [IO.File]::ReadAllText((Join-Path $package.InstallLocation 'AppxManifest.xml'))
+    $application = @($manifest.Package.Applications.Application | Where-Object {
+        $_.Executable -match '(?i)(^|[\\/])(ChatGPT|Codex)\.exe$'
+    })
+    if ($application.Count -ne 1) { throw 'Could not resolve the desktop application launch identity.' }
+    return $package.PackageFamilyName + '!' + $application[0].Id
+}
+
+function Get-ActivationEnvironmentValue($Name, $Target) {
+    return [Environment]::GetEnvironmentVariable($Name, $Target)
+}
+
+function Assert-ChatGPTActivationEnvironment($Settings) {
+    # Shell activation uses the Windows user environment, not a custom child
+    # environment block. Never silently route an account to an external home/API.
+    $defaultHome = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex'
+    if ((Get-NormalizedPath $Settings.CanonicalHome) -ine (Get-NormalizedPath $defaultHome)) {
+        throw 'Package launch requires the default shared Codex home.'
+    }
+    foreach ($target in @('User', 'Machine')) {
+        $homeOverride = Get-ActivationEnvironmentValue 'CODEX_HOME' $target
+        if ($homeOverride -and (Get-NormalizedPath $homeOverride) -ine (Get-NormalizedPath $defaultHome)) {
+            throw 'Package launch blocked by a CODEX_HOME environment override. Remove it and sign out of Windows before retrying.'
+        }
+        foreach ($name in @('CODEX_SQLITE_HOME', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'OPENAI_BASE_URL', 'CODEX_APP_SERVER_OPENAI_BASE_URL', 'CODEX_APP_SERVER_CHATGPT_BASE_URL')) {
+            if (Get-ActivationEnvironmentValue $name $target) {
+                throw "Package launch blocked by an environment override: $name. Remove it and sign out of Windows before retrying."
+            }
+        }
+    }
+}
+
+function Invoke-ChatGPTPackageActivation([string]$AppUserModelId) {
+    if (-not ('CodexSwitcher.PackageActivator' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace CodexSwitcher {
+    [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IApplicationActivationManager {
+        [PreserveSig] int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appId,
+            [MarshalAs(UnmanagedType.LPWStr)] string arguments, uint options, out uint processId);
+        [PreserveSig] int ActivateForFile(IntPtr appId, IntPtr items, IntPtr verb, out uint processId);
+        [PreserveSig] int ActivateForProtocol(IntPtr appId, IntPtr items, out uint processId);
+    }
+    public static class PackageActivator {
+        public static uint Activate(string appId) {
+            object instance = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")));
+            try {
+                uint processId;
+                int result = ((IApplicationActivationManager)instance).ActivateApplication(appId, null, 2, out processId);
+                Marshal.ThrowExceptionForHR(result);
+                return processId;
+            } finally { Marshal.FinalReleaseComObject(instance); }
+        }
+    }
+}
+'@
+    }
+    return [CodexSwitcher.PackageActivator]::Activate($AppUserModelId)
+}
+
+function Test-ChatGPTDesktopWindow([string]$AppUserModelId) {
+    $package = Get-AppxPackage -Name 'OpenAI.Codex' | Where-Object {
+        $_.PackageFamilyName -eq ($AppUserModelId -split '!')[0]
+    } | Sort-Object Version -Descending | Select-Object -First 1
+    if (-not $package) { return $false }
+    $appDirectory = (Join-Path $package.InstallLocation 'app').TrimEnd('\') + '\'
+    foreach ($candidate in @(Get-Process -Name ChatGPT, Codex -ErrorAction SilentlyContinue)) {
+        try {
+            if ($candidate.MainWindowHandle -ne [IntPtr]::Zero -and $candidate.Path.StartsWith($appDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        } catch { } finally { $candidate.Dispose() }
+    }
+    return $false
+}
+
 function Start-SharedChatGPT {
     param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
 
     if ($Settings.TestMode -or $Settings.SkipLaunch) {
         return
     }
-    $executable = Get-ChatGPTExecutable
-    $startInfo = New-Object Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $executable
-    $startInfo.WorkingDirectory = Split-Path -Parent $executable
-    $startInfo.UseShellExecute = $false
-    $startInfo.EnvironmentVariables['CODEX_HOME'] = $Settings.CanonicalHome
-    $null = $startInfo.EnvironmentVariables.Remove('CODEX_SQLITE_HOME')
-    # These overrides have higher precedence than config.toml. The selected
-    # profile supplies auth and routing for this launched app process.
-    foreach ($name in @('OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'OPENAI_BASE_URL', 'CODEX_APP_SERVER_OPENAI_BASE_URL', 'CODEX_APP_SERVER_CHATGPT_BASE_URL')) {
-        $null = $startInfo.EnvironmentVariables.Remove($name)
+    Assert-ChatGPTActivationEnvironment $Settings
+    $appUserModelId = Get-ChatGPTAppUserModelId
+    try {
+        # Direct CreateProcess loses MSIX identity in newer desktop runtimes.
+        # Activate the manifest application just as the Windows Start menu does.
+        $startedId = Invoke-ChatGPTPackageActivation $appUserModelId
+    } catch {
+        $detail = [string]$_.Exception.Message
+        $inner = ''
+        if ($null -ne $_.Exception.InnerException) { $inner = [string]$_.Exception.InnerException.Message }
+        $combined = ($detail + ' ' + $inner).Trim()
+        # A failed MSIX package update blocks direct execution of the packaged
+        # executable; report the real cause instead of a generic launch error.
+        # Windows localizes this denial, so match both English and Chinese text.
+        if ($combined -match '(?i)access is denied|拒绝访问|0x80073D28|administrator|管理员|package|程序包|应用包') {
+            throw "ChatGPT desktop package cannot start (应用包无法启动). Windows refused to run the packaged executable: $detail. The app package most likely needs an administrator to finish registering its update; open the app once from the Start menu, or re-register the package as an administrator, then retry."
+        }
+        throw "ChatGPT could not be started (应用启动失败): $detail"
     }
-    $started = [Diagnostics.Process]::Start($startInfo)
-    if (-not $started) {
-        throw 'ChatGPT failed to start.'
+    if (-not $startedId) {
+        throw 'ChatGPT did not report a started process.'
     }
+    try { $started = [Diagnostics.Process]::GetProcessById($startedId) }
+    catch {
+        if (Test-ChatGPTDesktopWindow $appUserModelId) { return }
+        throw 'ChatGPT application launch ended before startup completed.'
+    }
+    try {
+        if ($started.WaitForExit(3000) -and -not (Test-ChatGPTDesktopWindow $appUserModelId)) {
+            throw 'ChatGPT application launch exited during startup.'
+        }
+    } finally { $started.Dispose() }
 }
 
 function Update-SharedConfig {
@@ -741,7 +839,9 @@ function Get-ApiModelCatalogPath {
             if (@($models | Where-Object { $_.visibility -ceq 'list' -and $_.supported_in_api -is [bool] -and $_.supported_in_api }).Count -eq 0) { throw 'No visible API models.' }
             if ($source -eq $cachePath) {
                 $text = @{ models = $models } | ConvertTo-Json -Depth 100
-                Write-AtomicText -Path $catalogPath -Text $text
+                if (-not (Test-Path -LiteralPath $catalogPath) -or [IO.File]::ReadAllText($catalogPath) -cne $text) {
+                    Write-AtomicText -Path $catalogPath -Text $text
+                }
             }
             return $catalogPath
         } catch {
@@ -756,6 +856,28 @@ function Get-ApiModelCatalogPath {
 function Get-LabModelCatalogPath {
     param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
     return Get-ApiModelCatalogPath -Settings $Settings -CatalogName 'lab-models.json'
+}
+
+
+function Update-ManagedModelCatalogs {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+    # Best-effort picker refresh: no auth/config writes or recovery side effects.
+    $lock = $null
+    try {
+        $lock = Enter-SwitcherMutex $Settings
+        foreach ($pending in @((Get-TransactionPath $Settings switch), (Get-TransactionPath $Settings management), (Get-SwitchRecoveryPath $Settings))) {
+            if (Test-Path -LiteralPath $pending) { return }
+        }
+        foreach ($name in @('api-models.json','lab-models.json')) {
+            if (Test-Path -LiteralPath (Join-Path $Settings.VaultRoot $name) -PathType Leaf) {
+                $null = Get-ApiModelCatalogPath $Settings -CatalogName $name -WarningAction SilentlyContinue
+            }
+        }
+    } catch {
+        # Busy or unreadable cache must not prevent opening the picker.
+    } finally {
+        if ($null -ne $lock) { $lock.ReleaseMutex(); $lock.Dispose() }
+    }
 }
 
 function Get-OwnedApiCatalogName {
@@ -1304,6 +1426,7 @@ $settings = Get-SwitcherSettings -TestSettingsPath $TestSettings
 $mutex = $null
 try {
     if ($Status -or $StatusJson) {
+        if ($RefreshModelCatalog) { Update-ManagedModelCatalogs $settings }
         if ($StatusJson) { Get-ProfileStatus -Settings $settings | ConvertTo-Json -Depth 8 }
         else { Get-ProfileStatus -Settings $settings | Format-List }
         return

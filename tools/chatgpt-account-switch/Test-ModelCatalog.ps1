@@ -34,9 +34,34 @@ try {
     $activeConfig=[IO.File]::ReadAllText($configPath)
     Check ($activeConfig.Contains('# shared') -and $activeConfig.Contains("[features]`r`nplugins = true")) 'Shared settings are untouched.'
     Check ((Get-FileHash $cachePath).Hash -eq $cacheHash) 'The official cache is read-only.'
+    # New releases use the same metadata path; never synthesize a renamed model.
+    $models+=@{slug='gpt-6.1-sol';display_name='GPT-6.1-Sol';visibility='list';supported_in_api=$true;base_instructions='Sol 6.1 fixture';extra=@{future='kept'}}
+    Write-AtomicText $cachePath (@{models=$models}|ConvertTo-Json -Depth 10)
+    $protected=@($configPath,(Join-Path $s.CanonicalHome 'auth.json'),(Get-ProfileRegistryPath $s))
+    $hashes=@($protected|ForEach-Object {(Get-FileHash $_).Hash})
+    Update-ManagedModelCatalogs $s
+    Check (([IO.File]::ReadAllText($catalogPath)|ConvertFrom-Json).models[-1].slug -ceq 'gpt-6.1-sol') 'Opening the picker refreshes existing snapshots without an account switch.'
+    Check ((@($protected|ForEach-Object {(Get-FileHash $_).Hash}) -join ',') -ceq ($hashes -join ',')) 'Picker refresh keeps auth, config and registry unchanged.'
+    Invoke-ProfileSwitch $s $api.id -DoNotLaunch
+    $refreshed=([IO.File]::ReadAllText($catalogPath)|ConvertFrom-Json).models
+    Check ($refreshed[-1].slug -ceq 'gpt-6.1-sol' -and $refreshed[-1].extra.future -ceq 'kept') 'Next API activation picks up GPT-6.1 Sol and its metadata from the refreshed cache.'
+    Check ([IO.File]::ReadAllText($configPath).Contains('model = "gpt-6-luna"')) 'New model availability does not change the selected model.'
+    $stamp=[DateTime]::UtcNow.AddDays(-1)
+    [IO.File]::SetLastWriteTimeUtc($catalogPath,$stamp)
+    Invoke-ProfileSwitch $s $api.id -DoNotLaunch
+    Check ([IO.File]::GetLastWriteTimeUtc($catalogPath) -eq $stamp) 'Unchanged model data is not rewritten.'
+    foreach($pending in @((Get-TransactionPath $s switch),(Get-TransactionPath $s management),(Get-SwitchRecoveryPath $s))) {
+        Write-AtomicText $pending 'FAKE pending recovery'
+        Write-AtomicText $cachePath '{"models":[{"slug":"pending-new-model","visibility":"list","supported_in_api":true}]}'
+        Update-ManagedModelCatalogs $s
+        Check ([IO.File]::GetLastWriteTimeUtc($catalogPath) -eq $stamp) 'Pending recovery prevents picker catalog writes.'
+        Remove-Item -LiteralPath $pending
+    }
+    Write-AtomicText $cachePath (@{models=$models}|ConvertTo-Json -Depth 10)
     $snapshotHash=(Get-FileHash $catalogPath).Hash
     foreach($invalid in @('{broken','{"models":[]}','{"models":[{"slug":"duplicate","visibility":"list","supported_in_api":true},{"slug":"duplicate","visibility":"list","supported_in_api":true}]}')) {
         Write-AtomicText $cachePath $invalid
+        Update-ManagedModelCatalogs $s
         Invoke-ProfileSwitch $s $api.id -DoNotLaunch
         Check ((Get-FileHash $catalogPath).Hash -eq $snapshotHash) 'Bad cache falls back to the last valid snapshot.'
     }
@@ -72,6 +97,8 @@ try {
     $s.VaultRoot=Join-Path $root 'empty-vault'
     New-Item -ItemType Directory -Path $s.VaultRoot | Out-Null
     Write-AtomicText $cachePath '{broken'
+    Update-ManagedModelCatalogs $s
+    Check (-not (Test-Path (Join-Path $s.VaultRoot 'api-models.json'))) 'Opening an uninitialized picker does not create a catalog.'
     $result=Add-ApiModelCatalogRoute $plain $s
     Check (@($result.Entries|Where-Object Line -match 'model_catalog_json').Count -eq 0) 'No valid cache means no fabricated model catalog.'
     $managedLine='model_catalog_json = '+((Join-Path $s.VaultRoot 'api-models.json')|ConvertTo-Json -Compress)
