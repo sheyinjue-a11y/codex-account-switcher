@@ -31,6 +31,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 
+$localFastLauncher = Join-Path (Split-Path $PSScriptRoot -Parent) 'codex-api-fast\Start-LocalApiFastClient.ps1'
+if (Test-Path -LiteralPath $localFastLauncher -PathType Leaf) {
+    . $localFastLauncher
+} else {
+    function Start-LocalApiFastClient { return $false }
+}
+
 function Get-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -669,6 +676,13 @@ function Start-SharedChatGPT {
         return
     }
     Assert-ChatGPTActivationEnvironment $Settings
+    $localFastError = $null
+    try {
+        if (Start-LocalApiFastClient) { return }
+    } catch {
+        $localFastError = 'Local Fast client unavailable; starting the official app. ' + $_.Exception.Message
+        Write-Warning $localFastError
+    }
     $appUserModelId = Get-ChatGPTAppUserModelId
     try {
         # Direct CreateProcess loses MSIX identity in newer desktop runtimes.
@@ -692,7 +706,10 @@ function Start-SharedChatGPT {
     }
     try { $started = [Diagnostics.Process]::GetProcessById($startedId) }
     catch {
-        if (Test-ChatGPTDesktopWindow $appUserModelId) { return }
+        if (Test-ChatGPTDesktopWindow $appUserModelId) {
+            if ($localFastError) { Show-ApiFastDegradedNotice $localFastError }
+            return
+        }
         throw 'ChatGPT application launch ended before startup completed.'
     }
     try {
@@ -700,6 +717,14 @@ function Start-SharedChatGPT {
             throw 'ChatGPT application launch exited during startup.'
         }
     } finally { $started.Dispose() }
+    if ($localFastError) { Show-ApiFastDegradedNotice $localFastError }
+}
+
+function Show-ApiFastDegradedNotice([string]$Detail) {
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $null = $shell.Popup($Detail, 20, 'Codex: Fast unavailable; official client started', 64)
+    } catch { Write-Warning $Detail }
 }
 
 function Update-SharedConfig {

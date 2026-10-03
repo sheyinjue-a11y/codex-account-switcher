@@ -22,6 +22,10 @@ $toolFiles=@(
     'Test-AccountSwitcher.ps1','Test-ProviderSwitcher.ps1','Test-Recovery.ps1','Test-MultiProfileRecovery.ps1','Test-AstraWarmup.ps1','Test-AstraWarmupIntegration.py','Test-SharedSessions.py'
 )
 $files=@($rootFiles)+@($toolFiles | ForEach-Object { 'tools/chatgpt-account-switch/'+$_ })
+$fastFiles=@('README.md','package.json','package-lock.json','patch-core.cjs','local-client-core.cjs',
+    'test-patch-core.cjs','test-local-client-core.cjs','Install-LocalApiFastClient.ps1',
+    'Start-LocalApiFastClient.ps1','Disable-LocalApiFastClient.ps1','Rebuild-LocalApiFastClient.cmd','Test-LocalApiFastClient.ps1')
+$files+=@($fastFiles | ForEach-Object { 'tools/codex-api-fast/'+$_ })
 # Scan only explicitly selected project files, never the user's auth or history.
 foreach($relative in $files) {
     $path=Join-Path $repo $relative

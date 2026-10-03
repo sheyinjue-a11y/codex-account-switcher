@@ -1,0 +1,13 @@
+{
+  "name": "codex-api-fast-patch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fail-closed local Codex API Fast UI patch engine",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test-patch-core.cjs test-local-client-core.cjs"
+  },
+  "dependencies": {
+    "acorn": "8.15.0"
+  }
+}

@@ -8,6 +8,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify optional API Fast patch
+        shell: powershell
+        working-directory: tools/codex-api-fast
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'Fast patch dependency installation failed.' }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Fast patch tests failed.' }
       - name: Install pinned official CLI for offline format checks
         shell: powershell
         run: |

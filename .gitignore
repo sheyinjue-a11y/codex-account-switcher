@@ -24,6 +24,8 @@ __pycache__/
 
 # Publication snapshots and distribution packages
 dist/
+node_modules/
+.codex-api-fast-client/
 *.zip
 
 # macOS build outputs (never include account data)
