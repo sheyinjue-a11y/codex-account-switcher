@@ -1,6 +1,13 @@
 # 更新记录
 
-## 未发布 — Windows API Fast
+## v0.3.2 — Windows 统一入口
+
+- Windows 下载包只保留一个 `Codex Account Switcher.exe` 入口、`app` 文件夹和使用说明，不再让用户选择安装、登录、启动等命令文件。
+- 首次打开引导浏览器登录或导入当前账号；已有账号库直接进入账号列表。
+- 优先使用官方桌面应用自带的登录组件，无需额外安装 CLI 开发环境。
+- Astra 预热收进主窗口的「设置」菜单。macOS 保持原有的单一 `.app` 入口。
+
+### 可选 Windows API Fast 开发功能
 
 - 新增默认不安装的本地客户端副本补丁，让支持相应档位的 API 登录显示并发送 Fast 请求。
 - 副本安装在用户目录，避开商店应用对 AppData 的重定向；启动时校验版本及完整性，不兼容时回到原版。
@@ -33,9 +40,3 @@ Windows 使用 `Astra-Warmup.cmd`；macOS 使用设置菜单。确认额外请�
 预热是实验性的独立请求，不共享网络连接，不保证修复服务商的所有首次连接问题。仅支持默认目录、文件 API 登录、内置 `openai` 路由。测试不调用真实付费模型；真实桌面、账号与服务商仍需人工验收。
 
 macOS 13+，Apple Silicon / Intel Universal；仅 ad-hoc 签名，未经 Apple 公证。请核验来源与 SHA256，不要关闭 Gatekeeper。
-# v0.3.2 — unified Windows entry
-
-- Windows download now contains one `Codex Account Switcher.exe` entry, an `app` folder, and a short usage note. Development and test scripts are no longer presented as launch choices.
-- First launch guides browser login or imports the current login; existing users open their account list directly.
-- Uses the official desktop application's bundled CLI when no standalone CLI is installed.
-- Moves Astra warmup into the account window's Settings menu. macOS keeps its existing single `.app` entry.
