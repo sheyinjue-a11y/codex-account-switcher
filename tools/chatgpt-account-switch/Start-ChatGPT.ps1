@@ -124,13 +124,13 @@ function Start-PickerSwitch {
 function Connect-AccountPicker {
     param($Window, [string]$SwitcherPath, [scriptblock]$Runner = ${function:Start-PickerSwitch}, [switch]$LoadProfiles)
     $controls = @{}
-    foreach ($name in @('ProfileCards','AddButton','CancelButton','RepairButton','RetryButton','CancelLoginButton','CopyErrorButton','StatusText','Progress','ErrorDetails','ErrorText')) { $controls[$name] = $Window.FindName($name) }
+    foreach ($name in @('ProfileCards','AddButton','CancelButton','RepairButton','SettingsButton','RetryButton','CancelLoginButton','CopyErrorButton','StatusText','Progress','ErrorDetails','ErrorText')) { $controls[$name] = $Window.FindName($name) }
     $state = @{ Busy = $false; Job = $null; Controls = $controls; Window = $Window; Runner = $Runner; SwitcherPath = $SwitcherPath; LastOperation = $null; CancelPath = $null; Action = ''; CompletionMessage = '' }
     $timer = New-Object Windows.Threading.DispatcherTimer; $timer.Interval = [TimeSpan]::FromMilliseconds(150); $state.Timer = $timer
     $setBusy = {
         param([bool]$Busy)
         $state.Busy = $Busy
-        foreach ($name in @('ProfileCards','AddButton','CancelButton','RepairButton','RetryButton','CopyErrorButton')) { $controls[$name].IsEnabled = -not $Busy }
+        foreach ($name in @('ProfileCards','AddButton','CancelButton','RepairButton','SettingsButton','RetryButton','CopyErrorButton')) { $controls[$name].IsEnabled = -not $Busy }
         foreach ($card in $Window.Tag.Cards.Values) { $card.Switch.IsEnabled = -not $Busy; $card.Menu.IsEnabled = -not $Busy; $card.Menu.ContextMenu.IsOpen = $false }
         $controls.Progress.Visibility = if ($Busy) { 'Visible' } else { 'Collapsed' }
         $controls.CancelLoginButton.Visibility = if ($Busy -and $state.CancelPath) { 'Visible' } else { 'Collapsed' }
@@ -187,6 +187,24 @@ function Connect-AccountPicker {
     }
     $controls.AddButton.ContextMenu = $addMenu
     $controls.AddButton.Add_Click(({ $addMenu.PlacementTarget = $controls.AddButton; $addMenu.IsOpen = $true }.GetNewClosure()))
+    $settingsMenu = New-Object Windows.Controls.ContextMenu
+    $warmup = New-Object Windows.Controls.MenuItem; $warmup.Header = 'Astra 首条消息预热…'
+    $warmup.Add_Click(({
+        if ($state.Busy) { return }
+        $info = New-Object Diagnostics.ProcessStartInfo
+        $info.FileName = Join-Path ([Environment]::GetFolderPath('System')) 'WindowsPowerShell\v1.0\powershell.exe'
+        $info.Arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "' + (Join-Path $PSScriptRoot 'Configure-AstraWarmup.ps1') + '"'
+        $info.UseShellExecute = $false; $info.CreateNoWindow = $true
+        try { [Diagnostics.Process]::Start($info).Dispose() } catch { & $showError '未能打开预热设置，请确认完整解压了应用。' }
+    }.GetNewClosure()))
+    $null = $settingsMenu.Items.Add($warmup)
+    $help = New-Object Windows.Controls.MenuItem; $help.Header = '使用说明'
+    $help.Add_Click(({
+        [Windows.MessageBox]::Show($Window, '点击账号卡片即可切换并启动 Codex；“＋ 添加”管理 ChatGPT 和 API 账号。切换前先退出 Codex。首次设置、以后启动都使用同一个应用入口。', '使用说明', 'OK', 'Information') | Out-Null
+    }.GetNewClosure()))
+    $null = $settingsMenu.Items.Add($help)
+    $controls.SettingsButton.ContextMenu = $settingsMenu
+    $controls.SettingsButton.Add_Click(({ $settingsMenu.PlacementTarget = $controls.SettingsButton; $settingsMenu.IsOpen = $true }.GetNewClosure()))
     $controls.RepairButton.Add_Click(({ & $begin 'Repair' '' $null }.GetNewClosure()))
     $controls.RetryButton.Add_Click(({ & $begin $state.LastOperation.Action $state.LastOperation.ProfileId $null }.GetNewClosure()))
     $controls.CopyErrorButton.Add_Click(({ try { [Windows.Clipboard]::SetText($controls.ErrorText.Text) } catch { $controls.StatusText.Text = '复制失败，请在错误详情中选中文字复制。' } }.GetNewClosure()))

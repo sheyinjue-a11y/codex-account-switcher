@@ -6,7 +6,7 @@
   <a href="#快速开始"><img src="https://img.shields.io/badge/Windows-PowerShell_5.1-2867C7?style=flat-square" alt="Windows · PowerShell 5.1"></a>
   <a href="macos/README.md"><img src="https://img.shields.io/badge/macOS-Native_SwiftUI-318E83?style=flat-square" alt="macOS · 原生 SwiftUI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-318E83?style=flat-square" alt="MIT 许可证"></a>
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.3.1"><img src="https://img.shields.io/badge/v0.3.1-公开预览版-526B86?style=flat-square" alt="v0.3.1 公开预览版"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest"><img src="https://img.shields.io/badge/v0.3.2-公开预览版-526B86?style=flat-square" alt="v0.3.2 公开预览版"></a>
   <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml"><img src="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml/badge.svg" alt="Windows 离线测试"></a>
 </p>
 
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/tag/v0.3.1"><strong>↓ 下载 Windows / macOS</strong></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest"><strong>↓ 下载 Windows / macOS</strong></a>
   &nbsp; · &nbsp; <a href="#快速开始">快速开始</a>
   &nbsp; · &nbsp; <a href="#界面预览">看看界面</a>
   &nbsp; · &nbsp; <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases">更新记录</a>
@@ -59,7 +59,7 @@
 | 系统 | 下载与入口 |
 | --- | --- |
 | **macOS** | Release 中的 `Codex-Account-Switcher-macOS-universal.zip`，解压后把 `.app` 拖进「应用程序」，双击使用。[Mac 安装说明](macos/README.md) |
-| **Windows** | Release 中的 `Codex-Account-Switcher-Windows.zip`，完整解压，按下方步骤操作。 |
+| **Windows** | Release 中的 `Codex-Account-Switcher-Windows.zip`，完整解压后双击 **Codex Account Switcher.exe**。首次设置和以后启动都用这一个入口。 |
 
 ### macOS
 
@@ -69,13 +69,15 @@ Mac 工具为 macOS 13+ Universal 应用；官方 Codex 的系统和芯片要求
 
 ### Windows
 
-**先准备好官方 Codex，之后只需「安装一次，双击启动」。**
+**完整解压 → 双击应用 → 选择账号。**
 
-1. 安装官方 Codex Windows 桌面应用和 CLI，确认终端能运行 `codex.exe --version`。项目依赖 Windows PowerShell 5.1 / WPF（Windows 自带）；日常使用不需要 Python、Node.js 或开发环境。
-2. 先在 Codex 登录自己的第一个账号。工具需要 `%USERPROFILE%\.codex\auth.json` 文件登录；如果尚未生成，双击 `Login.cmd`，在浏览器完成官方登录。此操作可能替换当前登录，先关闭 Codex 并备份已有凭据。不要分享该文件。
-3. 下载并**完整解压**仓库 ZIP，放到准备长期保留的目录。首次使用前备份 `%USERPROFILE%\.codex`；已有旧版还需备份 `%LOCALAPPDATA%\CodexAccountSwitcher`。备份含敏感数据，勿上传。
-4. 退出 Codex 桌面、CLI 和编辑器中的 Codex，双击 `Setup.cmd`。它导入当前账号，或迁移旧版账号库，并创建桌面快捷方式。无需管理员权限。
-5. 双击 `Start.cmd` 或桌面 **Codex Account Switcher**。用「＋ 添加」增加 ChatGPT 或 API 配置档，点击卡片切换并启动 Codex。
+1. 下载 Windows 应用包（不要选 GitHub 自动生成的 Source code ZIP），完整解压到准备长期保留的目录。
+2. 双击 **Codex Account Switcher.exe**。已有账号库会直接打开；首次使用会在窗口中引导安装官方 Codex、浏览器登录或导入已有登录。优先使用官方桌面应用自带的登录组件，无需另装 Node.js、Python 或开发环境。
+3. 用「＋ 添加」增加 ChatGPT 或 API 配置档，点击卡片切换并启动 Codex。Astra 预热在「设置」里，配置修复也在主窗口中。
+
+首次导入及切换前请退出 Codex 桌面、CLI 和编辑器中的 Codex。建议先备份 `%USERPROFILE%\.codex` 和已有的 `%LOCALAPPDATA%\CodexAccountSwitcher`；备份含敏感数据，勿上传。应用使用 Windows 自带的 PowerShell 5.1 / WPF，无需管理员权限。请保留旁边的 `app` 文件夹；需要桌面入口时，右键 `.exe` 创建快捷方式。
+
+Windows 应用暂未购买代码签名证书，系统可能提示未知发布者。请核验下载来源后决定是否运行。开发者源码保留脚本入口，正式 Windows 应用包不再把这些脚本摆在顶层。
 
 如果 Windows 阻止下载的脚本，请先检查文件来源和代码；在 ZIP 属性中解除阻止后重新解压。不要全局降低 PowerShell 执行策略。企业策略限制脚本时请联系管理员。
 
@@ -101,7 +103,7 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 
 ### Astra 首条消息自动预热（可选）
 
-默认关闭。先切换到需要使用的 API 档，Windows 双击 `Astra-Warmup.cmd`；macOS 在设置菜单中启用 Astra 预热。确认额外请求费用后，按 Codex 的提示亲自审查并信任用户级 hook，再重开 Codex。切换器不会代替你批准 hook，也不会在开启设置时发送请求。
+默认关闭。先切换到需要使用的 API 档，Windows 打开「设置 → Astra 首条消息预热」；macOS 在设置菜单中启用 Astra 预热。确认额外请求费用后，按 Codex 的提示亲自审查并信任用户级 hook，再重开 Codex。切换器不会代替你批准 hook，也不会在开启设置时发送请求。
 
 启用后，你在新会话中直接选择 `gpt-6-astra` 发送消息：工具先向同一 API 服务发送一次 `gpt-5.6-sol`、`low` 的固定短消息 `Reply only OK.`；成功后由官方 Codex 继续发送原来的 Astra 消息。原文、附件、工具和工作区内容不会发送给 Sol。同一账号的同一会话只在预热成功后记一次；失败会拦截原消息，你可以重试或关闭预热。
 
@@ -137,10 +139,10 @@ macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」
 <summary><strong>展开安装、切换与卸载排查</strong></summary>
 
 - **提示进程仍在运行**：退出桌面、终端和编辑器集成后重试。工具不会强制结束你的任务。
-- **第一次没有账号**：按快速开始完成文件登录，再点「重置 / 修复」。API-only 用户也可导入已由官方 CLI 保存的 API 登录。
+- **第一次没有账号**：双击应用后按向导完成浏览器登录，成功后自动导入。API-only 用户也可导入已由官方 CLI 保存的 API 登录。
 - **提示账号身份不一致**：若当前登录对应已注册账号，工具可校正状态；未知账号不会覆盖旧档。先备份再排查，不要手工删除凭据或恢复记录。
 - **切换成功但没启动**：登录已切换，确认官方桌面应用安装正常，再点相同配置档。
-- **移动了解压目录**：`Start.cmd` 仍可用；删除旧快捷方式后重跑 `Setup.cmd` 生成新快捷方式。安装器不会覆盖已有同名快捷方式。
+- **移动了解压目录**：将 `.exe` 与 `app` 文件夹一起移动，仍可双击启动。桌面快捷方式需要指向新的 `.exe` 位置。
 - **如何卸载**：若开启了 Astra 预热，先在各已启用 API 档关闭预热，再删除程序目录和快捷方式。共享 `.codex` 与账号库不会自动删除，避免误删历史。若要永久移除凭据，先确认备份和当前登录。
 
 </details>

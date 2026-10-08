@@ -33,3 +33,9 @@ Windows 使用 `Astra-Warmup.cmd`；macOS 使用设置菜单。确认额外请�
 预热是实验性的独立请求，不共享网络连接，不保证修复服务商的所有首次连接问题。仅支持默认目录、文件 API 登录、内置 `openai` 路由。测试不调用真实付费模型；真实桌面、账号与服务商仍需人工验收。
 
 macOS 13+，Apple Silicon / Intel Universal；仅 ad-hoc 签名，未经 Apple 公证。请核验来源与 SHA256，不要关闭 Gatekeeper。
+# v0.3.2 — unified Windows entry
+
+- Windows download now contains one `Codex Account Switcher.exe` entry, an `app` folder, and a short usage note. Development and test scripts are no longer presented as launch choices.
+- First launch guides browser login or imports the current login; existing users open their account list directly.
+- Uses the official desktop application's bundled CLI when no standalone CLI is installed.
+- Moves Astra warmup into the account window's Settings menu. macOS keeps its existing single `.app` entry.

@@ -47,7 +47,8 @@ jobs:
       - name: Build sanitized Windows distribution
         shell: powershell
         run: |
-          ./scripts/Export-PublicRelease.ps1 -Name codex-account-switcher-windows
+          ./scripts/Build-WindowsApp.ps1 -Name codex-account-switcher-windows
+          ./scripts/Test-WindowsPackage.ps1 -Directory dist/codex-account-switcher-windows
           Move-Item -LiteralPath dist/codex-account-switcher-windows.zip -Destination dist/Codex-Account-Switcher-Windows.zip
           $hash = (Get-FileHash -LiteralPath dist/Codex-Account-Switcher-Windows.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  Codex-Account-Switcher-Windows.zip" | Set-Content -LiteralPath dist/SHA256SUMS.txt -Encoding ascii
