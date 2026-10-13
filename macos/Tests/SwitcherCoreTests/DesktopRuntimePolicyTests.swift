@@ -2,6 +2,27 @@ import XCTest
 @testable import SwitcherCore
 
 final class DesktopRuntimePolicyTests: XCTestCase {
+    func testCurrentImportAcceptsFileOrDefaultStoreIncludingUTF8BOM() {
+        XCTAssertTrue(DesktopRuntimePolicy.canImportCurrent(authExists: true, configuration: nil))
+        for text in ["", "model = \"test\"\n", "cli_auth_credentials_store = \"file\"\n",
+                     "\u{FEFF}cli_auth_credentials_store = \"file\"\n"] {
+            XCTAssertTrue(DesktopRuntimePolicy.canImportCurrent(authExists: true, configuration: Data(text.utf8)))
+        }
+    }
+
+    func testCurrentImportRejectsKeychainModesEvenWhenAuthFileExists() {
+        for store in ["auto", "keyring"] {
+            let configuration = Data("cli_auth_credentials_store = \"\(store)\"\n".utf8)
+            XCTAssertFalse(DesktopRuntimePolicy.canImportCurrent(authExists: true, configuration: configuration), store)
+        }
+    }
+
+    func testCurrentImportRejectsMissingAuthOrInvalidUTF8() {
+        XCTAssertFalse(DesktopRuntimePolicy.canImportCurrent(authExists: false, configuration: nil))
+        XCTAssertFalse(DesktopRuntimePolicy.canImportCurrent(authExists: false, configuration: Data("cli_auth_credentials_store = \"file\"\n".utf8)))
+        XCTAssertFalse(DesktopRuntimePolicy.canImportCurrent(authExists: true, configuration: Data([0xff, 0xfe, 0x00])))
+    }
+
     func testExplicitLoginComponentOverridesBundledComponent() {
         let candidates = DesktopRuntimePolicy.loginCandidates(
             selected: "/Users/test/Custom Tools/codex", desktop: URL(fileURLWithPath: "/Applications/Codex.app"),

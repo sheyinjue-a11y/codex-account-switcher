@@ -57,7 +57,11 @@ enum Theme {
     func reload() {
         guard let engine, !preview else { return }
         desktopAvailable = runtime.desktop != nil
-        currentLoginAvailable = FileManager.default.fileExists(atPath: home.appendingPathComponent("auth.json").path)
+        do {
+            currentLoginAvailable = DesktopRuntimePolicy.canImportCurrent(
+                authExists: FileManager.default.fileExists(atPath: home.appendingPathComponent("auth.json").path),
+                configuration: try PrivateFiles.read(home.appendingPathComponent("config.toml")))
+        } catch { currentLoginAvailable = false }
         engine.refreshModelCatalog()
         do {
             let status = try engine.status()

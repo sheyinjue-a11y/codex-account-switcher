@@ -10,6 +10,17 @@ public enum DesktopRuntimePolicy {
         "CODEX_APP_SERVER_OPENAI_BASE_URL", "CODEX_APP_SERVER_CHATGPT_BASE_URL"
     ]
 
+    public static func canImportCurrent(authExists: Bool, configuration: Data?) -> Bool {
+        guard authExists else { return false }
+        var text = ""
+        if let configuration {
+            guard let decoded = String(data: configuration, encoding: .utf8) else { return false }
+            text = decoded.hasPrefix("\u{FEFF}") ? String(decoded.dropFirst()) : decoded
+        }
+        do { try ConfigEditor.assertFileImport(text); return true }
+        catch { return false }
+    }
+
     public static func loginEnvironment(_ inherited: [String: String], home: URL) -> [String: String] {
         var environment = inherited
         for name in environmentOverrides { environment.removeValue(forKey: name) }
