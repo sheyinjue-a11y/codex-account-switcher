@@ -21,17 +21,21 @@ enum Theme {
     @Published var message = ""
     @Published var errorText = ""
     @Published var form: FormMode?
+    @Published var desktopAvailable = false
+    @Published var currentLoginAvailable = false
     let runtime = MacRuntime()
     let preview: Bool
     let home: URL
     let root: URL
     var engine: SwitcherEngine?
-    init(preview: Bool = false) {
+    init(preview: Bool = false, emptyPreview: Bool = false) {
         self.preview = preview
         let user = FileManager.default.homeDirectoryForCurrentUser.resolvingSymlinksInPath()
         home = user.appendingPathComponent(".codex")
         root = user.appendingPathComponent("Library/Application Support/CodexAccountSwitcher")
         if preview {
+            desktopAvailable = true
+            if emptyPreview { return }
             let auth = Data(#"{"auth_mode":"chatgpt","tokens":{"account_id":"demo","access_token":"FAKE","refresh_token":"FAKE","id_token":"FAKE"}}"#.utf8)
             if let personal = try? Profile(name: "个人", auth: auth, route: Route()),
                let apiAuth = try? Credential.api("DEMO_NOT_A_REAL_KEY"),
@@ -52,6 +56,8 @@ enum Theme {
     }
     func reload() {
         guard let engine, !preview else { return }
+        desktopAvailable = runtime.desktop != nil
+        currentLoginAvailable = FileManager.default.fileExists(atPath: home.appendingPathComponent("auth.json").path)
         engine.refreshModelCatalog()
         do {
             let status = try engine.status()
@@ -63,6 +69,11 @@ enum Theme {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = detail
         alert.addButton(withTitle: action); alert.addButton(withTitle: "取消")
         return alert.runModal() == .alertFirstButtonReturn
+    }
+    func recheck() {
+        guard !busy else { return }
+        errorText = ""
+        reload()
     }
     func perform(_ work: @escaping () throws -> Void, success: String) {
         guard !busy, !preview else { return }
@@ -93,9 +104,27 @@ enum Theme {
         }
     }
     func importCurrent(_ name: String) {
-        guard let engine, !busy else { return }
-        guard confirm("导入当前文件登录？", "请先结束任务并退出 Codex。只保存当前 auth.json 的加密副本，不读取官方钥匙串，不复制历史。", action: "导入") else { return }
-        perform({ try engine.importCurrent(name: name) }, success: "当前登录已导入。")
+        guard let engine, !busy, !preview else { return }
+        guard confirm("导入当前登录？", "请先保存正在执行的任务。工具会正常退出 Codex，再保存当前登录；本地会话和项目继续共用。", action: "导入并开始") else { return }
+        busy = true; errorText = ""; message = "正在退出 Codex 并导入当前登录…"
+        Task {
+            do {
+                try await runtime.quitDesktop()
+                try await Task.detached { try engine.importCurrent(name: name) }.value
+                message = "当前登录已导入，点击账号即可打开 Codex。"
+            } catch { message = ""; errorText = error.localizedDescription }
+            busy = false; reload()
+        }
+    }
+    var firstRunAction: String {
+        if !desktopAvailable { return "选择已安装的 Codex.app" }
+        return currentLoginAvailable ? "导入当前登录并开始" : "登录 ChatGPT 并开始"
+    }
+    func startUsing() {
+        guard !busy, !pending else { return }
+        if !desktopAvailable { chooseApp() }
+        else if currentLoginAvailable { importCurrent("当前账号") }
+        else { login("个人") }
     }
     func login(_ name: String, replacing id: UUID? = nil) {
         guard let engine, !busy, !preview else { return }
@@ -123,7 +152,7 @@ enum Theme {
         let panel = NSOpenPanel(); panel.title = "选择官方 Codex.app"
         panel.allowedContentTypes = [.applicationBundle]; panel.directoryURL = URL(fileURLWithPath: "/Applications")
         if panel.runModal() == .OK, let url = panel.url {
-            do { try runtime.selectDesktop(url); message = "已选择 Codex.app。" }
+            do { try runtime.selectDesktop(url); desktopAvailable = true; message = "已选择 Codex.app。"; reload() }
             catch { errorText = error.localizedDescription }
         }
     }
@@ -193,7 +222,7 @@ struct ProfileForm: View {
             }
         }.padding(28).frame(width: 470)
             .onAppear {
-                name = mode.profile?.name ?? ""
+                name = mode.profile?.name ?? (mode.kind == .current ? "当前账号" : "")
                 if let profile = mode.profile {
                     baseURL = (try? ConfigEditor.endpoint(profile.route)) ?? ""
                     modelName = (try? ConfigEditor.model(profile.route)) ?? ""
@@ -231,6 +260,7 @@ struct PickerView: View {
                 Menu {
                     Button("选择 Codex.app…", action: model.chooseApp)
                     Button("选择官方登录组件…", action: model.chooseCLI)
+                    Button("重新检查", action: model.recheck)
                     Divider()
                     Button("打开共享数据目录") { NSWorkspace.shared.open(model.home) }
                     Button("打开账号库目录") { NSWorkspace.shared.open(model.root) }
@@ -251,8 +281,19 @@ struct PickerView: View {
                     if model.profiles.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "person.crop.circle.badge.plus").font(.system(size: 34)).foregroundStyle(Theme.blue)
-                            Text("先添加你的第一个账号").font(.headline)
-                            Text("已有文件登录可直接导入；也可以通过浏览器添加。\n首次使用前，请备份 ~/.codex。").font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            Text("从这里开始，以后也从这里打开。").font(.headline)
+                            Text(model.desktopAvailable ? "已有登录可直接导入，也可以添加 ChatGPT 或 API。\n账号切换后，原来的本地会话与项目继续共用。" : "先选择官方 Codex 桌面应用，然后在这里完成登录和切换。").font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            Button(model.firstRunAction, action: model.startUsing)
+                                .buttonStyle(.borderedProminent).controlSize(.large)
+                                .accessibilityIdentifier("first-run-start")
+                            HStack {
+                                if !model.desktopAvailable {
+                                    Button("下载官方 Codex") { NSWorkspace.shared.open(URL(string: "https://chatgpt.com/codex")!) }
+                                } else if model.currentLoginAvailable {
+                                    Button("登录另一个 ChatGPT 账号") { model.login("个人") }
+                                }
+                                Button("使用 API") { model.form = FormMode(kind: .api) }
+                            }.font(.callout)
                         }.frame(maxWidth: .infinity).padding(.vertical, 36)
                     }
                     ForEach(model.profiles) { profile in accountRow(profile) }
@@ -262,7 +303,10 @@ struct PickerView: View {
                 if model.pending { Button("发现未完成切换 · 点击恢复", action: model.recover).disabled(model.busy).foregroundStyle(.orange) }
                 if model.busy { HStack { ProgressView().controlSize(.small); Text(model.message).font(.caption) } }
                 else if !model.message.isEmpty { Text(model.message).font(.caption).foregroundStyle(Theme.teal) }
-                if !model.errorText.isEmpty { Text(model.errorText).font(.caption).foregroundStyle(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
+                if !model.errorText.isEmpty {
+                    Text(model.errorText).font(.caption).foregroundStyle(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    Button("重新检查", action: model.recheck).disabled(model.busy)
+                }
                 if model.loggingIn {
                     HStack {
                         Button("打开登录页面") { if let url = model.runtime.browserURL { NSWorkspace.shared.open(url) } }
@@ -338,6 +382,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         let args = ProcessInfo.processInfo.arguments
+        NSApp.setActivationPolicy(.regular)
+        DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        if let index = args.firstIndex(of: "--smoke-test"), args.count > index + 1 {
+            // Observe the actual SwiftUI application window created by LaunchServices.
+            // Do not manufacture a second window as the illustration renderer does.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let windows = NSApp.windows.filter { $0.isVisible && $0.contentView != nil && $0.title == "Codex Account Switcher" }
+                let model = SwitcherApplication.sharedModel
+                let report: [String: Any] = ["visibleWindows": windows.count, "preview": model.preview,
+                    "profiles": model.profiles.count, "firstRunAction": model.firstRunAction,
+                    "bundleVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+                    "error": model.errorText]
+                do {
+                    guard let window = windows.first, let view = window.contentView else { throw SwitcherError.message("LaunchServices did not create the account window.") }
+                    view.layoutSubtreeIfNeeded(); window.displayIfNeeded()
+                    let output = URL(fileURLWithPath: args[index + 1])
+                    if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: bitmap)
+                        try bitmap.representation(using: .png, properties: [:])?.write(to: output.appendingPathExtension("png"))
+                    }
+                    try JSONSerialization.data(withJSONObject: report, options: .sortedKeys).write(to: output)
+                    exit(windows.count == 1 && model.errorText.isEmpty ? 0 : 1)
+                } catch { fputs("Packaged UI smoke check failed.\n", stderr); exit(1) }
+            }
+        }
         if let index = args.firstIndex(of: "--render-preview"), args.count > index + 1 {
             // ImageRenderer cannot draw AppKit-backed Menu/ScrollView controls.
             // Host the real view in a native window and capture its display instead.
@@ -358,9 +427,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct SwitcherApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @MainActor static let sharedModel = SwitcherModel(preview: ProcessInfo.processInfo.arguments.contains("--render-preview"))
+    @MainActor static let sharedModel = SwitcherModel(
+        preview: ProcessInfo.processInfo.arguments.contains("--render-preview") || ProcessInfo.processInfo.arguments.contains("--smoke-test"),
+        emptyPreview: ProcessInfo.processInfo.arguments.contains("--smoke-empty"))
     var body: some Scene {
-        WindowGroup("Codex Account Switcher") { PickerView(model: Self.sharedModel) }
+        Window("Codex Account Switcher", id: "main") { PickerView(model: Self.sharedModel) }
             .windowResizability(.contentMinSize)
             .commands { CommandGroup(replacing: .newItem) {} }
     }

@@ -35,6 +35,8 @@ jobs:
           python tools/chatgpt-account-switch/Test-AstraWarmupIntegration.py --codex "$CODEX_TEST_BINARY" --mac-driver "$bin_path/WarmupFixture"
       - name: Build universal app and render synthetic preview
         run: bash macos/scripts/build.sh
+      - name: Open the distributed app through LaunchServices
+        run: python macos/scripts/test-app-launch.py 'dist/macos/Codex Account Switcher.app'
       - name: Check packaged non-GUI hook entry without credentials
         run: |
           python - <<'PY'
@@ -50,7 +52,10 @@ jobs:
           name: macOS-universal
           path: |
             dist/macos/Codex-Account-Switcher-macOS-universal.zip
+            dist/macos/Codex-Account-Switcher-macOS-universal.dmg
             dist/macos/SHA256SUMS.txt
             dist/macos/macos-preview.png
+            dist/macos/first-run.png
+            dist/macos/accounts-launch.png
             dist/macos/请先阅读.md
           if-no-files-found: error

@@ -24,6 +24,14 @@ lipo "$app/Contents/MacOS/CodexAccountSwitcher" -verify_arch arm64 x86_64
 "$app/Contents/MacOS/CodexAccountSwitcher" --render-preview "$output/macos-preview.png"
 cp macos/README.md "$output/请先阅读.md"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$output/Codex-Account-Switcher-macOS-universal.zip"
+# The DMG is the user-facing install entry: one app beside Applications.
+image_root="$output/disk-image"
+mkdir -p "$image_root"
+ditto "$app" "$image_root/Codex Account Switcher.app"
+ln -s /Applications "$image_root/Applications"
+cp macos/README.md "$image_root/使用说明.md"
+hdiutil create -volname "Codex Account Switcher" -srcfolder "$image_root" -ov -format UDZO "$output/Codex-Account-Switcher-macOS-universal.dmg"
+hdiutil verify "$output/Codex-Account-Switcher-macOS-universal.dmg"
 cd "$output"
-shasum -a 256 Codex-Account-Switcher-macOS-universal.zip > SHA256SUMS.txt
+shasum -a 256 Codex-Account-Switcher-macOS-universal.zip Codex-Account-Switcher-macOS-universal.dmg > SHA256SUMS.txt
 echo "Built $app (ad-hoc signed, not notarized)"

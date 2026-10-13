@@ -11,6 +11,7 @@ $rootFiles=@('README.md','CHANGELOG.md','LICENSE','SECURITY.md','CONTRIBUTING.md
 $rootFiles+=@('assets/readme-banner.svg','assets/account-picker.png','assets/macos-picker.png')
 $rootFiles+='scripts/Test-WindowsPackage.ps1'
 $rootFiles+='docs/superpowers/plans/2026-10-01-model-catalog-refresh.md'
+$rootFiles+=@('macos/Sources/SwitcherCore/DesktopRuntimePolicy.swift','macos/Tests/SwitcherCoreTests/DesktopRuntimePolicyTests.swift','macos/scripts/test-app-launch.py')
 $rootFiles+=@('.gitattributes','.github/workflows/macos.yml','macos/Package.swift','macos/Info.plist','macos/README.md','macos/scripts/build.sh',
     'macos/Sources/SwitcherCore/Config.swift','macos/Sources/SwitcherCore/Models.swift','macos/Sources/SwitcherCore/Storage.swift','macos/Sources/SwitcherCore/Engine.swift','macos/Sources/SwitcherCore/AstraWarmup.swift',
     'macos/Sources/SwitcherApp/App.swift','macos/Sources/SwitcherApp/MacRuntime.swift',

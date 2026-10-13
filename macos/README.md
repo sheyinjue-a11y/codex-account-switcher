@@ -1,14 +1,16 @@
-# macOS 原生桌面版（v0.3.1 预览）
+# macOS 原生桌面版（v0.3.3 预览）
 
 这是切换 **官方 Codex 桌面应用** 的原生 SwiftUI 工具，不是 CLI 界面的替代品。日常点击操作，不需要终端或开发环境。工具支持 macOS 13+，Universal 二进制包含 Apple Silicon 和 Intel；官方 Codex 自身的系统/芯片要求仍以官方为准。
 
 ## 安装与使用
 
 1. 先安装官方 Codex.app。首次使用前退出 Codex，备份 `~/.codex`；备份可能包含凭据和私密会话，切勿上传。
-2. 从本仓库 Releases 下载 `Codex-Account-Switcher-macOS-universal.zip`，解压，将 **Codex Account Switcher.app** 拖到「应用程序」，双击打开。
+2. 推荐下载 Release 的 **Codex-Account-Switcher-macOS-universal.dmg**，打开后将 **Codex Account Switcher** 拖到旁边的 **Applications**。以后从「应用程序」或 Dock 打开这个应用即可，首次设置、登录、切换都用同一个入口。也提供 ZIP 便携包；不要下载 GitHub 自动生成的 Source code。
 3. 本预览版只有 ad-hoc 签名，**没有 Apple Developer ID 签名或公证**。macOS 可能阻止首次打开。核验来源和 SHA256 后，如你信任该软件，由你本人在系统「隐私与安全性」确认是否允许；企业策略不允许时不要绕过。不要全局关闭 Gatekeeper 或移除安全属性。
-4. 已有 `~/.codex/auth.json` 文件登录时，退出 Codex 后点「导入当前登录」。如果用钥匙串/auto 登录，点「＋ 添加 → ChatGPT 账号」完成官方浏览器登录，不用手工复制 token；首次切换会将本地认证存储设为 `file`。
+4. 首次打开按主窗口的醒目按钮继续：找不到官方应用时先「选择已安装的 Codex.app」，已有文件登录时「导入当前登录并开始」，否则「登录 ChatGPT 并开始」。API 用户点「使用 API」。导入会正常退出官方 Codex，再保存账号；不用选择命令脚本或手工复制 token。首次切换会将本地认证存储设为 `file`。
 5. 添加其他 ChatGPT 账号或 Responses API。点击账号卡片，确认后工具会正常退出 Codex、切换并重开。先结束正在执行的任务；CLI/编辑器仍运行时会停止切换，不强制杀进程。
+
+如果首次双击出现「无法验证开发者」或「Apple 无法检查是否包含恶意软件」，它发生在应用启动之前，DMG 本身不能消除此提示。先核验 Release 来源和校验值；如果决定信任这个未公证的社区工具，可按 [Apple 的说明](https://support.apple.com/zh-cn/102445) 在尝试打开后，到「系统设置 → 隐私与安全性」仅为此应用选择「仍要打开」。不需要终端命令，也不要关闭整个系统的安全检查。企业管理策略禁止时须由管理员处理。
 
 默认查找 `/Applications/Codex.app` 和 `~/Applications/Codex.app`。其他安装位置可用右上角设置选择。浏览器登录优先用官方桌面内附的 Codex 登录组件；找不到时可选择自己安装的官方 `codex` 可执行文件。不要选来源不明的程序。登录可取消，超时为 10 分钟；添加账号不会切换现有登录。
 
@@ -49,7 +51,7 @@
 
 ## 验证范围
 
-GitHub macOS CI 执行隔离 Swift 测试、双架构构建、签名/包结构检查及演示数据界面渲染。测试覆盖共享文件字节不变、凭据刷新保存、身份漂移、错误回滚、中断恢复、外部修改冲突、进程锁、链接拒绝、加密完整性和 API 输入。
+GitHub macOS CI 执行隔离 Swift 测试、双架构构建、签名/包结构检查及演示数据界面渲染。还会解压正式 ZIP，通过 macOS LaunchServices 实际打开应用，检查首次使用和已有账号场景各出现一个正常窗口；此检查不会另外构造预览窗口冒充启动成功。测试覆盖共享文件字节不变、凭据刷新保存、身份漂移、错误回滚、中断恢复、外部修改冲突、进程锁、链接拒绝、加密完整性和 API 输入。
 
 真实浏览器 OAuth、真实 Codex Desktop 的账号切换/历史显示、真实 API 服务、Gatekeeper/钥匙串提示及不同 macOS 版本仍需人工验收。发布时标明实际 CI 结果，不把编译通过当作真机业务验收。
 

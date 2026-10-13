@@ -26,25 +26,15 @@ final class MacRuntime {
         UserDefaults.standard.set(url.path, forKey: "codexAppPath")
     }
     func cli() throws -> URL {
-        var paths: [String] = []
-        if let app = desktop {
-            for name in ["codex", "bin/codex", "codex-aarch64-apple-darwin", "codex-x86_64-apple-darwin"] {
-                paths.append(app.appendingPathComponent("Contents/Resources/" + name).path)
-            }
-        }
-        if let selected = UserDefaults.standard.string(forKey: "codexCLIPath") { paths.append(selected) }
-        paths += ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", NSHomeDirectory() + "/.local/bin/codex"]
+        let paths = DesktopRuntimePolicy.loginCandidates(
+            selected: UserDefaults.standard.string(forKey: "codexCLIPath"), desktop: desktop, userHome: NSHomeDirectory())
         guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
             throw SwitcherError.message("未找到官方登录组件。请先选择 Codex.app；仍找不到时，在设置中选择已安装的官方 codex CLI。")
         }
         return URL(fileURLWithPath: path)
     }
     static func cleanEnvironment(home: URL) -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
-        for key in ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", "CODEX_ACCESS_TOKEN", "CODEX_AUTH_JSON", "CODEX_HOME", "CODEX_PROFILE"] { env.removeValue(forKey: key) }
-        env["CODEX_HOME"] = home.path
-        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + (env["PATH"] ?? "")
-        return env
+        DesktopRuntimePolicy.loginEnvironment(ProcessInfo.processInfo.environment, home: home)
     }
     static func assertDefaultHome(_ home: URL) throws {
         let configured = ProcessInfo.processInfo.environment["CODEX_HOME"] ?? ""
@@ -52,7 +42,7 @@ final class MacRuntime {
             throw SwitcherError.message("检测到自定义 CODEX_HOME。本版只管理 ~/.codex，未修改自定义目录。")
         }
         // Finder launches inherit launchd, not the user's interactive shell config.
-        for name in ["CODEX_HOME", "CODEX_SQLITE_HOME", "OPENAI_BASE_URL", "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_PROFILE", "CODEX_ACCESS_TOKEN", "CODEX_AUTH_JSON"] {
+        for name in DesktopRuntimePolicy.environmentOverrides {
             let inherited = ProcessInfo.processInfo.environment[name] ?? ""
             if !inherited.isEmpty && !(name == "CODEX_HOME" && inherited == home.path) {
                 throw SwitcherError.message("切换器启动环境有 \(name) 覆盖。请移除该覆盖后重开工具；未修改系统环境。")
@@ -90,12 +80,12 @@ final class MacRuntime {
         guard let app = desktop else { throw SwitcherError.message("未找到 Codex.app。请在设置中选择官方桌面应用。") }
         let path = app.resolvingSymlinksInPath().path
         let running = NSWorkspace.shared.runningApplications.filter { $0.bundleURL?.resolvingSymlinksInPath().path == path }
+        let snapshot = try await Task.detached { try Self.capture("/bin/ps", ["-axwwo", "pid=,ppid=,comm="]) }.value
         for process in running { _ = process.terminate() }
-        for _ in 0..<100 {
-            if running.allSatisfy(\.isTerminated) { return }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        throw SwitcherError.message("Codex 未正常退出。请保存任务并手动退出后重试。")
+        try await DesktopRuntimePolicy.waitForDesktopExit(
+            app: app, processIDs: Set(running.map(\.processIdentifier)), initialSnapshot: snapshot,
+            isTerminated: { running.allSatisfy(\.isTerminated) },
+            processSnapshot: { try await Task.detached { try Self.capture("/bin/ps", ["-axwwo", "pid=,ppid=,comm="]) }.value })
     }
     @MainActor func openDesktop() async throws {
         guard let app = desktop else { throw SwitcherError.message("账号已切换，但未找到 Codex.app。请在设置中选择应用后重新打开。") }

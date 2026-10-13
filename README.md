@@ -6,7 +6,7 @@
   <a href="#快速开始"><img src="https://img.shields.io/badge/Windows-PowerShell_5.1-2867C7?style=flat-square" alt="Windows · PowerShell 5.1"></a>
   <a href="macos/README.md"><img src="https://img.shields.io/badge/macOS-Native_SwiftUI-318E83?style=flat-square" alt="macOS · 原生 SwiftUI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-318E83?style=flat-square" alt="MIT 许可证"></a>
-  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest"><img src="https://img.shields.io/badge/v0.3.2-公开预览版-526B86?style=flat-square" alt="v0.3.2 公开预览版"></a>
+  <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest"><img src="https://img.shields.io/badge/v0.3.3-公开预览版-526B86?style=flat-square" alt="v0.3.3 公开预览版"></a>
   <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml"><img src="https://github.com/sheyinjue-a11y/codex-account-switcher/actions/workflows/windows-tests.yml/badge.svg" alt="Windows 离线测试"></a>
 </p>
 
@@ -58,12 +58,12 @@
 
 | 系统 | 下载与入口 |
 | --- | --- |
-| **macOS** | Release 中的 `Codex-Account-Switcher-macOS-universal.zip`，解压后把 `.app` 拖进「应用程序」，双击使用。[Mac 安装说明](macos/README.md) |
+| **macOS** | 下载 **Codex-Account-Switcher-macOS-universal.dmg**，打开并将应用拖进 **Applications**；以后只打开这个应用。首次设置、登录、导入和切换都在主窗口里。[Mac 安装说明](macos/README.md) |
 | **Windows** | Release 中的 `Codex-Account-Switcher-Windows.zip`，完整解压后双击 **Codex Account Switcher.exe**。首次设置和以后启动都用这一个入口。 |
 
 ### macOS
 
-先备份 `~/.codex`，安装官方 Codex.app，再打开切换器。用「导入当前登录」或「＋ 添加 → ChatGPT 账号」建立账号库，也可添加 Responses API；点击配置档，确认后正常退出并重开 Codex。日常操作不需要终端。
+先备份 `~/.codex`，安装官方 Codex.app，再打开切换器。首次使用按主窗口的「导入当前登录并开始」或「登录 ChatGPT 并开始」继续，API 用户点「使用 API」。以后点击账号即可正常退出并重开 Codex。日常操作不需要终端或命令文件。
 
 Mac 工具为 macOS 13+ Universal 应用；官方 Codex 的系统和芯片要求仍以官方为准。**当前仅 ad-hoc 签名、未经 Apple 公证**，首次打开可能被系统拦截。核验来源后，由用户本人决定是否允许；不要关闭 Gatekeeper。真实 Mac 登录、桌面账号切换和历史显示仍需人工验收。[完整限制与恢复方法](macos/README.md)
 
