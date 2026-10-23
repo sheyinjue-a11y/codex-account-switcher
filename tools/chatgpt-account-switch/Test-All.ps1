@@ -5,6 +5,7 @@ $tests=@('Test-ProfileRegistry.ps1','Test-FreshInstall.ps1','Test-MultiProfileMi
 $tests += 'Test-PackageLaunch.ps1'
 $tests += 'Test-OneClick.ps1'
 $tests += '..\codex-api-fast\Test-LocalApiFastClient.ps1'
+$tests += '..\codex-api-fast\Test-LocalApiFastAutoUpdate.ps1','..\codex-api-fast\Test-LocalApiFastInstaller.ps1'
 foreach($test in $tests) {
     & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $test)
     if($LASTEXITCODE -ne 0) { throw "Test failed: $test (exit $LASTEXITCODE)." }

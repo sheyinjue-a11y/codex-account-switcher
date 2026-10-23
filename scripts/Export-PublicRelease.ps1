@@ -28,6 +28,7 @@ $fastFiles=@('README.md','package.json','package-lock.json','patch-core.cjs','lo
     'test-patch-core.cjs','test-local-client-core.cjs','Install-LocalApiFastClient.ps1',
     'Start-LocalApiFastClient.ps1','Disable-LocalApiFastClient.ps1','Rebuild-LocalApiFastClient.cmd','Test-LocalApiFastClient.ps1')
 $files+=@($fastFiles | ForEach-Object { 'tools/codex-api-fast/'+$_ })
+$files+=@('Auto-LocalApiFastClient.ps1','Enable-LocalApiFastAutoUpdate.ps1','LocalApiFastInstaller.ps1','Test-LocalApiFastAutoUpdate.ps1','Test-LocalApiFastInstaller.ps1' | ForEach-Object { 'tools/codex-api-fast/'+$_ })
 # Scan only explicitly selected project files, never the user's auth or history.
 foreach($relative in $files) {
     $path=Join-Path $repo $relative

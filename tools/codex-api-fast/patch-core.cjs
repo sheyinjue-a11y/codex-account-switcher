@@ -5,11 +5,13 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const acorn = require('acorn');
 
-const ENGINE_VERSION = 1;
+const ENGINE_VERSION = 3;
 const MAX_HEADER = 32 * 1024 * 1024;
 const MAX_SCRIPT = 32 * 1024 * 1024;
 const AUTH_TYPES = ['chatgpt', 'personalAccessToken'];
-const patchedAuthTypes = [...AUTH_TYPES, 'apikey'];
+// Official 26.1016 also permits Bedrock. Recognize only these observed lists;
+// unknown authentication variants still require a reviewed compatibility update.
+const AUTH_TYPE_SETS = [AUTH_TYPES, [...AUTH_TYPES, 'amazonBedrock']];
 const sha256 = buffer => crypto.createHash('sha256').update(buffer).digest('hex');
 const fail = message => { throw new Error(message); };
 const isFunction = node => /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(node.type);
@@ -80,8 +82,8 @@ function allowList(node, negative) {
     authReference = ref;
     types.push(type);
   }
-  const expected = types.length === 2 ? AUTH_TYPES : types.length === 3 ? patchedAuthTypes : [];
-  if (types.length !== expected.length || new Set(types).size !== types.length || expected.some(type => !types.includes(type))) return null;
+  const officialTypes = types.filter(type => type !== 'apikey');
+  if (new Set(types).size !== types.length || !AUTH_TYPE_SETS.some(expected => officialTypes.length === expected.length && expected.every(type => officialTypes.includes(type)))) return null;
   return { node, negative, authNode: leaves[0].left, authReference, alreadyPatched: types.includes('apikey') };
 }
 
@@ -97,14 +99,76 @@ function featureRestriction(node) {
   return propertyName(unwrap(member.object)) === 'featureRequirements';
 }
 
-function findGates(source) {
+const isNull = node => node?.type === 'Literal' && node.value === null;
+const lastExpression = node => node?.type === 'SequenceExpression' ? node.expressions.at(-1) : node;
+function singleCall(node) { return node?.type === 'CallExpression' && node.callee.type === 'Identifier' && node.arguments.length === 1; }
+
+// Newer clients compute both speed permissions in an imported helper. Resolve
+// that helper before accepting gates; never match generic login allow-lists.
+function serviceTierHelper(fn, nodes) {
+  if (fn.async || fn.id?.type !== 'Identifier' || fn.params.length !== 1 || fn.params[0].type !== 'Identifier') return false;
+  const bindings = nodes.filter(n => n.type === 'VariableDeclarator' && n.id.type === 'Identifier');
+  const features = bindings.find(n => propertyName(unwrap(n.init)) === 'featureRequirements' && reference(unwrap(n.init)?.object) === `id:${fn.params[0].name}.requirements`);
+  if (!features) return false;
+  const fast = bindings.find(n => n.init?.type === 'BinaryExpression' && n.init.operator === '!==' && isFalse(n.init.right) && reference(n.init.left) === `id:${features.id.name}.?fast_mode`);
+  const returned = nodes.filter(n => n.type === 'ReturnStatement');
+  if (!fast || returned.length !== 1 || returned[0].argument?.type !== 'ObjectExpression') return false;
+  const props = returned[0].argument.properties;
+  return props.length === 2 && props.some(n => keyName(n) === 'fast' && reference(n.value) === `id:${fast.id.name}`) && props.some(n => keyName(n) === 'ultrafast' && nodesWithin(n.value).some(part => part.type === 'BinaryExpression' && part.operator === '!==' && isFalse(part.right) && reference(part.left) === `id:${features.id.name}.?ultrafast_mode`));
+}
+
+function modernGates(fn, nodes) {
+  const access = nodes.filter(n => n.type === 'Property' && keyName(n) === 'serviceTierAccess');
+  if (!fn.async && access.length) {
+    const lists = maximalAllowLists(nodes, false).filter(g => propertyName(unwrap(g.authNode)) === 'authMethod');
+    if (lists.length !== 1 || access.length !== 1) return [];
+    const gate = lists[0];
+    const binding = nodes.find(n => n.type === 'VariableDeclarator' && n.init === gate.node && n.id.type === 'Identifier');
+    const loading = nodes.find(n => n.type === 'Property' && keyName(n) === 'isLoading');
+    if (!binding || loading?.value.type !== 'Identifier') fail('Unsupported speed access UI bindings');
+    const conditions = nodes.filter(n => n.type === 'ConditionalExpression' && isNull(n.alternate) && singleCall(n.consequent));
+    const condition = conditions.find(n => {
+      // Flatten only conjunctions: an OR must never turn into an auth bypass.
+      const parts = [];
+      const visit = part => part.type === 'LogicalExpression' && part.operator === '&&' ? (visit(part.left), visit(part.right)) : parts.push(part);
+      visit(n.test);
+      return parts.length === 3 && parts.some(p => reference(p) === `id:${binding.id.name}`) && parts.some(p => p.type === 'UnaryExpression' && p.operator === '!' && reference(p.argument) === reference(loading.value)) && parts.some(p => p.type === 'BinaryExpression' && p.operator === '!=' && isNull(p.right) && reference(p.left) === reference(n.consequent.arguments[0]));
+    });
+    if (!condition) fail('Speed access UI restrictions changed');
+    // Follow the assignment and aliases used by React Compiler's memo cache.
+    const output = nodes.find(n => (n.type === 'AssignmentExpression' && n.operator === '=' && n.right === condition && n.left.type === 'Identifier') || (n.type === 'VariableDeclarator' && n.init === condition && n.id.type === 'Identifier'));
+    const names = new Set(output ? [(output.left ?? output.id).name] : []);
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const n of nodes) if (n.type === 'VariableDeclarator' && n.id.type === 'Identifier' && n.init?.type === 'Identifier' && names.has(n.init.name) && !names.has(n.id.name)) { names.add(n.id.name); changed = true; }
+    }
+    if (!names.has(access[0].value.name)) fail('Speed access UI output changed');
+    return [{...gate,role:'ui',helperName:condition.consequent.callee.name}];
+  }
+  if (!fn.async) return [];
+  const lists = maximalAllowLists(nodes, true).filter(g => unwrap(g.authNode)?.type === 'Identifier');
+  if (lists.length !== 1) return [];
+  const gate = lists[0];
+  const statement = nodes.find(n => n.type === 'IfStatement' && n.test === gate.node && !n.alternate);
+  const returned = statement?.consequent?.type === 'BlockStatement' && statement.consequent.body.length === 1 ? statement.consequent.body[0] : statement?.consequent;
+  if (returned?.type !== 'ReturnStatement' || !isNull(returned.argument)) return [];
+  const result = nodes.find(n => n.type === 'ReturnStatement' && n.start > statement.end && singleCall(lastExpression(n.argument)));
+  const call = lastExpression(result?.argument);
+  if (!call || !nodes.some(n => n.type === 'Property' && keyName(n) === 'authMethod' && reference(n.value) === gate.authReference)) return [];
+  if (!nodes.some(n => n.type === 'VariableDeclarator' && reference(n.id) === gate.authReference && n.init?.type === 'AwaitExpression' && n.end < statement.start) || !nodes.some(n => n.type === 'VariableDeclarator' && reference(n.id) === reference(call.arguments[0]) && n.init?.type === 'AwaitExpression' && n.start > statement.end && n.end < result.start)) fail('Speed access request data flow changed');
+  return [{...gate,role:'request',helperName:call.callee.name}];
+}
+
+function analyzeScript(source) {
   const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
   const allNodes = nodesWithin(ast);
   const gates = [];
+  const helpers = new Set();
   for (const fn of allNodes.filter(isFunction)) {
     const ownNodes = nodesWithin(fn, true);
+    if (serviceTierHelper(fn, ownNodes)) helpers.add(fn.id.name);
     const restrictions = ownNodes.filter(featureRestriction);
-    if (restrictions.length === 0) continue;
+    if (restrictions.length === 0) { gates.push(...modernGates(fn, ownNodes)); continue; }
     const eligibility = ownNodes.filter(node => node.type === 'Property' && keyName(node) === 'isServiceTierAllowed');
     if (eligibility.length) {
       const lists = maximalAllowLists(ownNodes, false).filter(gate => {
@@ -138,17 +202,39 @@ function findGates(source) {
       gates.push({ ...gate, role: 'request' });
     }
   }
-  return gates;
+  return {gates, helpers, imports:ast.body.filter(n => n.type === 'ImportDeclaration'), exports:ast.body.filter(n => n.type === 'ExportNamedDeclaration')};
 }
 
+function findGates(source) { return analyzeScript(source).gates; }
+
 function transformScripts(scripts) {
-  const entries = scripts.map(script => ({ ...script, gates: findGates(script.source) }));
+  const entries = scripts.map(script => ({ ...script, ...analyzeScript(script.source) }));
   return transformEntries(entries);
 }
 
 function transformEntries(entries) {
   const gates = entries.flatMap(entry => entry.gates);
   if (gates.length !== 2 || gates.filter(gate => gate.role === 'ui').length !== 1 || gates.filter(gate => gate.role === 'request').length !== 1) fail(`Expected exactly one UI and one request Fast gate; found ${gates.length}`);
+  const modern = gates.filter(g => g.helperName);
+  if (modern.length) {
+    if (modern.length !== 2) fail('Mixed legacy and speed access gate structures');
+    const identities = [];
+    for (const entry of entries) for (const gate of entry.gates) {
+      let target = entry, name = gate.helperName;
+      if (!entry.helpers.has(name)) {
+        const imp = entry.imports.find(n => n.specifiers.some(s => s.local.name === name));
+        const spec = imp?.specifiers.find(s => s.local.name === name);
+        if (spec?.type !== 'ImportSpecifier' || !imp.source.value.startsWith('.')) fail('Unresolved speed access helper');
+        const targetPath = path.posix.normalize(path.posix.join(path.posix.dirname(entry.path), imp.source.value));
+        target = entries.find(e => e.path === targetPath);
+        const exported = target?.exports.flatMap(n => n.specifiers).find(s => (s.exported.name ?? s.exported.value) === (spec.imported.name ?? spec.imported.value));
+        name = exported?.local.name;
+      }
+      if (!target?.helpers.has(name)) fail('Unverified speed access restrictions');
+      identities.push(`${target.path}:${name}`);
+    }
+    if (new Set(identities).size !== 1) fail('UI and request speed access helpers differ');
+  }
   if (new Set(gates.map(gate => gate.alreadyPatched)).size !== 1) fail('Mixed patched/unpatched Fast gates require recovery');
   const alreadyPatched = gates.every(gate => gate.alreadyPatched);
   for (const entry of entries) {
@@ -241,12 +327,12 @@ function prepareArchive(archivePath) {
       if (!record.path.startsWith('webview/') || !record.path.endsWith('.js') || record.size > MAX_SCRIPT) continue;
       const buffer = readExact(archive.fd, record.size, archive.dataStart + record.offset);
       const source = buffer.toString('utf8');
-      if (!source.includes('fast_mode') || !source.includes('personalAccessToken') || !source.includes('chatgpt')) continue;
-      const gates = findGates(source);
-      if (!gates.length) continue;
+      if (!(source.includes('fast_mode') && source.includes('ultrafast_mode')) && !(source.includes('personalAccessToken') && source.includes('chatgpt') && (source.includes('fast_mode') || source.includes('serviceTierAccess')))) continue;
+      const analysis = analyzeScript(source);
+      if (!analysis.gates.length && !analysis.helpers.size) continue;
       if (!Buffer.from(source, 'utf8').equals(buffer)) fail('Patch target is not valid UTF-8');
       verifyIntegrity(buffer, record.path, record.entry.integrity);
-      scripts.push({ path: record.path, source, record, gates, originalSha256: sha256(buffer) });
+      scripts.push({ path: record.path, source, record, ...analysis, originalSha256: sha256(buffer) });
     }
     const transformed = transformEntries(scripts);
     return { ...archive, ...transformed };
@@ -268,7 +354,7 @@ function describe(archivePath, archive) {
     archiveSize: archive.size,
     archiveSha256: fileSha256(archive.fd, archive.size),
     headerSha256: archive.headerSha256,
-    targetEntries: archive.entries.filter(entry => entry.gates).map(entry => ({
+    targetEntries: archive.entries.filter(entry => entry.gates.length).map(entry => ({
       path: entry.path,
       originalSha256: entry.originalSha256,
       patchedSha256: sha256(Buffer.from(entry.patchedSource, 'utf8')),
@@ -317,7 +403,7 @@ function buildArchive(archivePath, outputPath) {
     let chunks = [];
     if (!archive.alreadyPatched) {
       let nextOffset = archive.size - archive.dataStart;
-      for (const entry of archive.entries.filter(entry => entry.gates)) {
+      for (const entry of archive.entries.filter(entry => entry.gates.length)) {
         const buffer = Buffer.from(entry.patchedSource, 'utf8');
         entry.record.entry.offset = String(nextOffset);
         entry.record.entry.size = buffer.length;

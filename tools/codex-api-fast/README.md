@@ -20,6 +20,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-LocalApiFastCl
 Node 不在 PATH 时，可给安装脚本传 `-NodePath <node.exe 的绝对路径>`。
 依赖仍需先由 npm 安装。安装无需管理员权限，会额外占用一份客户端的磁盘空间。
 
+### 自动适配官方更新
+
+安装 Node.js 22+ 并在本目录执行 `npm ci` 后，只需开启一次：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Enable-LocalApiFastAutoUpdate.ps1
+```
+
+也可指定 `-NodePath` 和 `-ModulePath`（包含 `acorn` 的 node_modules 目录）。
+开启时记录这两个本机路径，不需要把 Node 加入桌面进程的 PATH，也不会自动下载或执行网络脚本。
+以后从桌面切换器使用 API 账户时，先检查官方版本和副本完整性；需要适配时自动构建、校验并启动。
+首次更新后的启动会较慢，后续复用通过验证的副本。个人账户不触发自动适配。
+
+自动流程使用语义匹配，支持已知的 Fast 判断结构及变量、文件名变化。
+它无法保证任意未来版本都兼容；遇到未知逻辑会停止修改、记录原因，并通过切换器提示降级到官方版。
+相同包与补丁工具的失败只尝试一次，更新官方包、补丁工具或恢复依赖后自动重试；也可再次运行开启脚本手动重试。
+诊断位于 `%USERPROFILE%\.codex-api-fast-client\auto-update-status.json`。
+
 安装到 `%USERPROFILE%\.codex-api-fast-client\versions`。这里刻意避开 AppData：
 在商店应用内写入 AppData 会被重定向到私有 LocalCache，桌面切换器无法看见。
 
@@ -38,13 +56,14 @@ Node 不在 PATH 时，可给安装脚本传 `-NodePath <node.exe 的绝对路�
 - 副本没有商店包身份，内置更新器不可用；原版由 Microsoft Store 更新。
   其他依赖包身份的功能未全面验收。
 
-每次启动检查商店版本，以及副本的 EXE、ASAR、运行库哈希。不一致时提示并回到
-官方版。官方更新后不会自动重建；运行 `Rebuild-LocalApiFastClient.cmd`。
-结构兼容时生成新版本副本，结构变化时拒绝修改，需要适配。无法保证未来每次更新兼容。
-已有版本目录不会被覆盖，失败的构建会保留供排查。
+每次启动检查商店版本，以及副本的 EXE、ASAR、运行库哈希。启用自动适配后，
+不一致时先尝试重建；未开启或适配失败时提示并回到官方版。
+也可手动运行 `Rebuild-LocalApiFastClient.cmd`。安装器串行构建到临时目录，完整
+验证后才原子切换清单；失败保留旧清单，已有未知目录移入 quarantine 留供排查。
+中断后已完成的版本可通过其独立清单验证并恢复，失败构建保留供排查。
 
 停用：运行 `Disable-LocalApiFastClient.ps1`，退出 Codex 后重新打开切换器。
-它停用安装清单，保留副本以便检查。不要再运行旧版写入 WindowsApps 的修复脚本。
+它同时关闭自动适配并停用安装清单，保留副本以便检查。不要再运行旧版写入 WindowsApps 的修复脚本。
 
 ## 验证
 
@@ -52,9 +71,21 @@ Node 不在 PATH 时，可给安装脚本传 `-NodePath <node.exe 的绝对路�
 发现并启动副本。用户会话已实际加载副本，并保存 `service_tier = "priority"`。
 这不代表所有服务商都会加速；部分转发网关即使加速，响应档位仍可能标为 `default`。
 
+`26.1013.4894.0` 将旧版布尔判断改为 `serviceTierAccess`，并把 Fast/Ultrafast
+限制移入共享模块。补丁引擎 v2 会解析模块导入，确认界面与请求使用同一个权限
+函数后，仅扩展两处认证列表；保留加载状态和服务端限制，仍兼容旧版结构。
+该版本已完成副本构建、隔离配置实际启动，以及从真实打包代码提取的界面和请求
+函数行为验证。验证没有发送付费请求，也不代表后续版本自动兼容。
+
+`26.1016.8120.0` 的官方名单增加了 Bedrock，补丁引擎 v3 保留其原有权限行为。
+该版本已实际通过自动检测、重建、再次启动复用及隔离进程启动；真实原版与修改版
+函数各通过 108 组认证/速度限制组合检查。官方 EXE、ASAR 和运行库哈希未变。
+
 ```powershell
 npm test
 powershell.exe -NoProfile -File .\Test-LocalApiFastClient.ps1
+powershell.exe -NoProfile -File .\Test-LocalApiFastAutoUpdate.ps1
+powershell.exe -NoProfile -File .\Test-LocalApiFastInstaller.ps1
 powershell.exe -NoProfile -File ..\chatgpt-account-switch\Test-PackageLaunch.ps1
 ```
 

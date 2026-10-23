@@ -1,4 +1,5 @@
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'Auto-LocalApiFastClient.ps1')
 
 function Get-LocalApiFastRoot {
     # AppData writes made inside the Store app are redirected into LocalCache.
@@ -46,7 +47,7 @@ function New-LocalApiFastProcessStartInfo([string]$Directory) {
 }
 
 function Start-LocalApiFastClient {
-    $item = Get-LocalApiFastInstallation
+    $item = Resolve-LocalApiFastInstallation
     if ($null -eq $item) { return $false }
     $psi = New-LocalApiFastProcessStartInfo $item.directory
     $process = [Diagnostics.Process]::Start($psi)

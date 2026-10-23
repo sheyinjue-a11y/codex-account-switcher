@@ -15,6 +15,7 @@ $relativeFiles += @('README.md','LICENSE','SECURITY.md','assets/readme-banner.sv
     'macos/README.md','docs/superpowers/plans/2026-10-01-model-catalog-refresh.md',
     'tools/codex-api-fast/README.md','tools/codex-api-fast/Start-LocalApiFastClient.ps1','tools/codex-api-fast/Disable-LocalApiFastClient.ps1')
 $relativeFiles += @('package.json','package-lock.json','patch-core.cjs','local-client-core.cjs','Install-LocalApiFastClient.ps1' | ForEach-Object { 'tools/codex-api-fast/' + $_ })
+$relativeFiles += @('Auto-LocalApiFastClient.ps1','Enable-LocalApiFastAutoUpdate.ps1','LocalApiFastInstaller.ps1','Rebuild-LocalApiFastClient.cmd' | ForEach-Object { 'tools/codex-api-fast/' + $_ })
 foreach ($relative in $relativeFiles) {
     $source = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing runtime file: $relative" }

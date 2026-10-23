@@ -16,6 +16,118 @@ const transform = source => transformScripts([{ path: 'webview/random-bundle.js'
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const patchedFunctions = () => vm.runInNewContext(`${transform(fixture)};({ui,request})`);
 
+const accessHelper = 'function access(response){let features=response.requirements?.featureRequirements,fast=features?.fast_mode!==!1;return{fast,ultrafast:(`supportsIndependentSpeedModes`in response&&response.supportsIndependentSpeedModes===!0||fast)&&features?.ultrafast_mode!==!1}}';
+const modernUI = 'function ui(auth,response,pending=false){let allowed=auth?.authMethod===`chatgpt`||auth?.authMethod===`personalAccessToken`,loading=!!auth?.isLoading||allowed&&pending,result;result=allowed&&!loading&&response!=null?readAccess(response):null;let value=result;return{serviceTierAccess:value,isLoading:loading}}';
+const modernRequest = 'async function request(auth,response){let method=await Promise.resolve(auth);if(method!==`chatgpt`&&method!==`personalAccessToken`)return null;let data=await Promise.resolve(response);return cache.setData(query,{authMethod:method,hostId:"local"},data),readAccess(data)}';
+const modernScripts = () => [
+  {path:'webview/assets/shared.js',source:accessHelper+';export {access as speedAccess}'},
+  {path:'webview/assets/initial.js',source:'import {speedAccess as readAccess} from "./shared.js";'+modernUI+';'+modernRequest}
+];
+
+test('26.1013 split speed access permits API and preserves loading and speed restrictions', async () => {
+  const scripts=modernScripts();
+  const run=source=>vm.runInNewContext(accessHelper+';const readAccess=access;'+source+';({ui,request})',{cache:{setData(){}},query:{}});
+  assert.equal(run(modernUI+';'+modernRequest).ui({authMethod:'apikey'},{requirements:{}}).serviceTierAccess,null);
+  const transformed=transformScripts(scripts);
+  const {ui,request}=run(transformed.entries[1].patchedSource.replace(/^import[^;]+;/,''));
+  for(const auth of ['apikey','chatgpt','personalAccessToken','copilot',null]) {
+    for(const fast of [undefined,false,true]) for(const ultrafast of [undefined,false,true]) {
+      const response={requirements:{featureRequirements:{fast_mode:fast,ultrafast_mode:ultrafast}}};
+      const expected=['apikey','chatgpt','personalAccessToken'].includes(auth)?{fast:fast!==false,ultrafast:fast!==false&&ultrafast!==false}:null;
+      assert.equal(JSON.stringify(ui({authMethod:auth},response).serviceTierAccess),JSON.stringify(expected));
+      assert.equal(JSON.stringify(await request(auth,response)),JSON.stringify(expected));
+    }
+  }
+  assert.equal(ui({authMethod:'apikey'},{requirements:{}},true).serviceTierAccess,null);
+  assert.equal(ui({authMethod:'apikey',isLoading:true},{requirements:{}}).serviceTierAccess,null);
+  assert.equal(ui({authMethod:'apikey'},null).serviceTierAccess,null);
+  const independent={requirements:{featureRequirements:{fast_mode:false}},supportsIndependentSpeedModes:true};
+  assert.equal(JSON.stringify(await request('apikey',independent)),JSON.stringify({fast:false,ultrafast:true}));
+  assert.equal(transformScripts(transformed.entries.map(e=>({path:e.path,source:e.patchedSource}))).alreadyPatched,true);
+  assert.equal(transformed.entries[0].patchedSource,scripts[0].source);
+});
+
+test('split speed access rejects unresolved helpers and changed authorization structure', () => {
+  for(const change of [
+    s=>s.slice(1),
+    s=>s.map(e=>({...e,source:e.source.replace('features?.fast_mode!==!1','true')})),
+    s=>s.map(e=>({...e,source:e.source.replace('allowed&&!loading&&response!=null','!loading&&response!=null')})),
+    s=>s.map(e=>({...e,source:e.source.replace('allowed&&!loading&&response!=null','allowed||!loading&&response!=null')})),
+    s=>s.map(e=>({...e,source:e.source.replace('return null;let data','return true;let data')})),
+    s=>s.map(e=>({...e,source:e.source.replace('readAccess(data)','otherAccess(data)')}))
+  ]) assert.throws(()=>transformScripts(change(modernScripts())));
+});
+
+test('split speed access survives renamed helpers and React memo assignments', () => {
+  const scripts=modernScripts().map(e=>({...e,source:e.source.replaceAll('readAccess','renamedHelper').replaceAll('speedAccess','renamedExport')}));
+  scripts[1].source=scripts[1].source.replace('result=allowed&&!loading&&response!=null?renamedHelper(response):null;', 'let memo=[];memo[0]!==response?(result=allowed&&!loading&&response!=null?renamedHelper(response):null,memo[0]=response,memo[1]=result):result=memo[1];');
+  assert.equal(transformScripts(scripts).entries.flatMap(e=>e.gates).length,2);
+});
+
+const bedrockScripts = () => modernScripts().map(entry => ({
+  ...entry,
+  source: entry.source
+    .replace('auth?.authMethod===`personalAccessToken`', 'auth?.authMethod===`personalAccessToken`||auth?.authMethod===`amazonBedrock`')
+    .replace('method!==`personalAccessToken`', 'method!==`personalAccessToken`&&method!==`amazonBedrock`')
+}));
+
+test('26.1016 Bedrock allow-list adds only API eligibility and preserves speed restrictions', async () => {
+  const scripts = bedrockScripts();
+  const run = source => vm.runInNewContext(accessHelper+';const readAccess=access;'+source.replace(/^import[^;]+;/,'')+';({ui,request})', {cache:{setData(){}},query:{}});
+  const original = run(scripts[1].source);
+  const transformed = transformScripts(scripts);
+  const patched = run(transformed.entries[1].patchedSource);
+  assert.equal(transformed.entries.flatMap(entry => entry.gates).length, 2);
+  assert.equal(transformed.entries[0].patchedSource, scripts[0].source);
+  for (const authMethod of ['apikey','chatgpt','personalAccessToken','amazonBedrock','bedrockApiKey','bedrockAccessKeys','copilot','futureAuth',null,undefined]) {
+    for (const fast of [undefined,false,true]) for (const ultrafast of [undefined,false,true]) {
+      for (const supportsIndependentSpeedModes of [false,true]) {
+        const response = {requirements:{featureRequirements:{fast_mode:fast,ultrafast_mode:ultrafast}},supportsIndependentSpeedModes};
+        const expected = ['apikey','chatgpt','personalAccessToken','amazonBedrock'].includes(authMethod)
+          ? {fast:fast!==false,ultrafast:(supportsIndependentSpeedModes||fast!==false)&&ultrafast!==false} : null;
+        assert.equal(JSON.stringify(patched.ui({authMethod},response).serviceTierAccess), JSON.stringify(expected));
+        assert.equal(JSON.stringify(await patched.request(authMethod,response)), JSON.stringify(expected));
+        if (authMethod !== 'apikey') {
+          assert.equal(JSON.stringify(patched.ui({authMethod},response)), JSON.stringify(original.ui({authMethod},response)));
+          assert.equal(JSON.stringify(await patched.request(authMethod,response)), JSON.stringify(await original.request(authMethod,response)));
+        } else assert.equal(original.ui({authMethod},response).serviceTierAccess, null);
+      }
+    }
+  }
+  for (const authMethod of ['apikey','amazonBedrock']) {
+    assert.equal(patched.ui({authMethod},{requirements:{}},true).serviceTierAccess,null);
+    assert.equal(patched.ui({authMethod,isLoading:true},{requirements:{}}).serviceTierAccess,null);
+    assert.equal(patched.ui({authMethod},null).serviceTierAccess,null);
+  }
+  assert.equal(transformScripts(transformed.entries.map(entry => ({path:entry.path,source:entry.patchedSource}))).alreadyPatched,true);
+});
+
+test('known Bedrock variant still refuses unknown, duplicate, and partially patched allow-lists', () => {
+  for (const replacement of ['copilot','bedrockApiKey','bedrockAccessKeys','futureAuth','personalAccessToken']) {
+    assert.throws(() => transformScripts(bedrockScripts().map(entry => ({...entry,source:entry.source.replaceAll('amazonBedrock',replacement)}))));
+  }
+  assert.throws(() => transformScripts(bedrockScripts().map(entry => ({...entry,source:entry.source.replace('||auth?.authMethod===`amazonBedrock`','||auth?.authMethod===`amazonBedrock`||auth?.authMethod===`futureAuth`')}))));
+  assert.throws(() => transformScripts(bedrockScripts().map(entry => ({...entry,source:entry.source.replace('||auth?.authMethod===`amazonBedrock`','||auth?.authMethod===`amazonBedrock`||auth?.authMethod===`apikey`')}))));
+});
+
+test('split ASAR build resolves helper imports and preserves the helper bytes', t => {
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'codex-fast-split-test-'));
+  t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const original=path.join(directory,'original.asar'),output=path.join(directory,'patched.asar');
+  const scripts=modernScripts(),files={},buffers=[];
+  let offset=0;
+  for(const script of scripts) {
+    const buffer=Buffer.from(script.source);
+    files[path.posix.basename(script.path)]={size:buffer.length,offset:String(offset),integrity:integrityFor(buffer,64)};
+    buffers.push(buffer);offset+=buffer.length;
+  }
+  fs.writeFileSync(original,Buffer.concat([encodeHeader({files:{webview:{files:{assets:{files}}}}}),...buffers]));
+  assert.equal(inspectArchive(original).status,'patchable');
+  assert.equal(buildArchive(original,output).targetEntries.length,1);
+  assert.deepEqual(archiveFile(output,scripts[0].path),buffers[0]);
+  assert.equal(inspectArchive(output).status,'patched');
+});
+
 test('regression: API key login must be eligible for Fast', () => {
   const original = vm.runInNewContext(`(${uiFixture})`);
   assert.equal(original({ authMethod: 'apikey' }, {}).isServiceTierAllowed, false);
