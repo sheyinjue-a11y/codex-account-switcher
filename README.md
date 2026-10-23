@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme-banner.svg" alt="Codex Account Switcher — 切换账号，接着做。多个登录与 API 配置档，一份本地工作区。" width="100%">
+  <img src="assets/readme-banner.svg" alt="Codex Account Switcher：切换账号，继续使用原来的本地会话和项目。" width="100%">
 </p>
 
 <p align="center">
@@ -11,183 +11,134 @@
 </p>
 
 <p align="center">
-  <strong>ChatGPT 账号与 Responses API，在一个窗口里管理。</strong><br>
-  切换登录和接口，继续使用同一份本地会话、项目与工作区。
+  <strong>在 Codex 桌面端切换 ChatGPT 账号和 API 服务。</strong><br>
+  保存多个账号，切换后继续使用原来的本地会话和项目。
 </p>
 
 <p align="center">
   <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest"><strong>↓ 下载 Windows / macOS</strong></a>
   &nbsp; · &nbsp; <a href="#快速开始">快速开始</a>
-  &nbsp; · &nbsp; <a href="#界面预览">看看界面</a>
+  &nbsp; · &nbsp; <a href="#界面预览">界面预览</a>
   &nbsp; · &nbsp; <a href="https://github.com/sheyinjue-a11y/codex-account-switcher/releases">更新记录</a>
 </p>
 
-> **适用范围**：Windows 与 macOS / 中文图形界面 / 官方 Codex 桌面账号切换。独立社区工具，非 OpenAI 官方产品；不切换 ChatGPT 网页或通用聊天客户端。下载包不附带账号、Key 或额度。
+> 这是用于官方 Codex 桌面端的社区工具，支持 Windows 和 macOS，界面为中文。它不切换 ChatGPT 网页账号，也不提供账号、API Key 或额度。
 
 ## 能做什么
 
-| 你要做的事 | 在切换器里 |
-| :--- | :--- |
-| 在多个 ChatGPT 账号间切换 | 浏览器登录、重复账号检测、重新登录与取消登录 |
-| 保存不同 API 服务 | 每档独立的 Base URL、Key 和默认模型 |
-| 整理账号列表 | 添加、重命名、编辑，删除非活动档 |
-| 接着处理原来的工作 | 共用本地会话、项目和工作区；云端内容随账号而定 |
-| 安全地保存和切换 | Windows DPAPI；macOS 钥匙串密钥 + AES-GCM；进程检查、失败回滚和中断恢复 |
+- 保存多个 ChatGPT 账号，通过浏览器登录后，在窗口里选择要用的账号。
+- 保存多个 API 服务，分别设置地址、Key 和默认模型。
+- 添加、重命名、编辑和删除账号配置。
+- 切换账号后保留本地会话、项目、技能和插件，继续原来的工作。
+- 在本机加密保存登录信息；切换失败时恢复原配置。
 
-旧个人／实验室双档安装可迁移，原实验室路由兼容逻辑保留；新建 API 档按你填写的服务和模型工作。
+支持迁移旧版保存的个人账号和实验室 API 设置。
 
 ## 界面预览
 
-### macOS · 原生 SwiftUI
-
-<p align="center">
-  <img src="assets/macos-picker.png" alt="macOS 原生切换器：个人账号、实验室 API、导入当前登录和添加入口。" width="560">
-</p>
-
-<p align="center"><sub>由 Mac runner 运行原生窗口生成，使用演示数据；非网页或 CLI 截图。</sub></p>
-
-### Windows · WPF
-
-<p align="center">
-  <img src="assets/account-picker.png" alt="切换器实际界面：个人 ChatGPT 档、实验室 API 档、添加按钮、配置档管理菜单和修复入口。" width="560">
-</p>
-
-<p align="center"><sub>实际 WPF 界面，使用演示数据；不包含真实账号、服务地址或凭据。</sub></p>
-
-## 快速开始
-
-| 系统 | 下载与入口 |
-| --- | --- |
-| **macOS** | 下载 **Codex-Account-Switcher-macOS-universal.dmg**，打开并将应用拖进 **Applications**；以后只打开这个应用。首次设置、登录、导入和切换都在主窗口里。[Mac 安装说明](macos/README.md) |
-| **Windows** | Release 中的 `Codex-Account-Switcher-Windows.zip`，完整解压后双击 **Codex Account Switcher.exe**。首次设置和以后启动都用这一个入口。 |
-
 ### macOS
 
-先备份 `~/.codex`，安装官方 Codex.app，再打开切换器。首次使用按主窗口的「导入当前登录并开始」或「登录 ChatGPT 并开始」继续，API 用户点「使用 API」。以后点击账号即可正常退出并重开 Codex。日常操作不需要终端或命令文件。
-
-Mac 工具为 macOS 13+ Universal 应用；官方 Codex 的系统和芯片要求仍以官方为准。**当前仅 ad-hoc 签名、未经 Apple 公证**，首次打开可能被系统拦截。核验来源后，由用户本人决定是否允许；不要关闭 Gatekeeper。真实 Mac 登录、桌面账号切换和历史显示仍需人工验收。[完整限制与恢复方法](macos/README.md)
+<p align="center">
+  <img src="assets/macos-picker.png" alt="macOS 切换器：账号列表、导入当前登录和添加账号入口。" width="560">
+</p>
 
 ### Windows
 
-**完整解压 → 双击应用 → 选择账号。**
+<p align="center">
+  <img src="assets/account-picker.png" alt="Windows 切换器：账号列表、添加按钮、管理菜单和修复入口。" width="560">
+</p>
 
-1. 下载 Windows 应用包（不要选 GitHub 自动生成的 Source code ZIP），完整解压到准备长期保留的目录。
-2. 双击 **Codex Account Switcher.exe**。已有账号库会直接打开；首次使用会在窗口中引导安装官方 Codex、浏览器登录或导入已有登录。优先使用官方桌面应用自带的登录组件，无需另装 Node.js、Python 或开发环境。
-3. 用「＋ 添加」增加 ChatGPT 或 API 配置档，点击卡片切换并启动 Codex。Astra 预热在「设置」里，配置修复也在主窗口中。
+两张截图均为实际应用界面，使用演示数据。
 
-首次导入及切换前请退出 Codex 桌面、CLI 和编辑器中的 Codex。建议先备份 `%USERPROFILE%\.codex` 和已有的 `%LOCALAPPDATA%\CodexAccountSwitcher`；备份含敏感数据，勿上传。应用使用 Windows 自带的 PowerShell 5.1 / WPF，无需管理员权限。请保留旁边的 `app` 文件夹；需要桌面入口时，右键 `.exe` 创建快捷方式。
+## 快速开始
 
-Windows 应用暂未购买代码签名证书，系统可能提示未知发布者。请核验下载来源后决定是否运行。开发者源码保留脚本入口，正式 Windows 应用包不再把这些脚本摆在顶层。
+先安装官方 Codex。首次使用或升级前，备份本地会话目录和已有账号库，具体位置见[数据与限制](#数据与限制)。备份可能含有登录信息，请勿上传。
 
-如果 Windows 阻止下载的脚本，请先检查文件来源和代码；在 ZIP 属性中解除阻止后重新解压。不要全局降低 PowerShell 执行策略。企业策略限制脚本时请联系管理员。
+### Windows
 
-官方客户端来源见 [OpenAI Codex 仓库](https://github.com/openai/codex)；本工具不捆绑或自动安装官方客户端。
+1. 在[下载页面](https://github.com/sheyinjue-a11y/codex-account-switcher/releases/latest)选择 `Codex-Account-Switcher-Windows.zip`，完整解压到准备长期保留的目录。不要选 GitHub 自动生成的 Source code ZIP。
+2. 双击 **Codex Account Switcher.exe**。首次使用按窗口提示登录 ChatGPT 或导入已有登录；已有账号库会直接打开。
+3. 点「＋ 添加」保存其他 ChatGPT 账号或 API 配置，点击账号卡片即可切换并启动 Codex。
+
+导入及切换前，请退出 Codex 桌面端、终端中的 Codex 和编辑器里的 Codex。保留 `.exe` 旁边的 `app` 文件夹；需要桌面入口时，为 `.exe` 创建快捷方式。
+
+普通账号切换无需管理员权限，也不用另装 Node.js 或 Python。程序未签名，Windows 可能提示未知发布者，请确认下载来源后再运行。若脚本被拦截，可在 ZIP 属性中解除阻止后重新解压；不要全局降低 PowerShell 执行策略。受公司策略限制时，请联系管理员。
+
+### macOS
+
+1. 下载 `Codex-Account-Switcher-macOS-universal.dmg`，打开后将应用拖进 **Applications**。
+2. 打开切换器，选择「导入当前登录并开始」或「登录 ChatGPT 并开始」；API 用户点「使用 API」。
+3. 点击账号，切换器会正常退出并重新打开 Codex。终端和编辑器中的 Codex 需要自行退出。
+
+切换器支持 macOS 13+ 和 Intel / Apple 芯片；官方 Codex 的系统要求以官方说明为准。**当前未经过 Apple 公证**，首次打开可能被拦截，请确认来源后按系统提示处理，不要关闭 Gatekeeper。详见 [Mac 安装与恢复说明](macos/README.md)。
 
 ## API 怎么填
 
-添加 API 时填写服务商提供的 **Responses API 基础地址**（不是 `/responses` 完整路径），例如 `https://api.example.com/v1`。HTTPS 为默认要求，仅本机回环测试地址允许 HTTP。不支持 Chat Completions-only 服务。模型名称由服务商决定，项目不保证任何特定模型可用。
-
-编辑 API 时，Key 留空表示保留原 Key。保存只进行本地格式检查；「测试连接」需要确认，可能消耗额度。切换器不会提供会员权益、共享额度或绕过服务商限制。
-
-macOS 预览版只允许编辑非活动 API 档，暂不提供「测试连接」按钮；Windows 版保留原功能。
-
-### 模型列表随官方目录更新
-
-激活 API 配置档时，两端会读取本机 Codex 已刷新的 `models_cache.json`，在切换器账号库中生成 `api-models.json`（Windows 旧实验室档沿用 `lab-models.json`），通过 `model_catalog_json` 交给 Codex 使用。包括 `gpt-6.1-sol` 在内的缓存模型均保留完整元数据；后续新增、改名或移除的模型也在下次激活 API 档时同步，无需逐个修改切换器代码。内容未变时不重复写入。
-
-打开切换器时也会刷新已有的托管目录，不切换账号、不改当前模型；目录首次绑定仍在激活 API 档时完成。缓存损坏、切换器忙或存在未完成恢复时跳过刷新，保留原数据。
-
-更新 Codex 后：让官方客户端完成模型缓存刷新 → 打开切换器 → 下次启动 Codex 使用新目录。已打开的模型菜单可能需要重启才会更新。不会自动把当前模型改为 6.1；请在 Codex 模型菜单选择。详见[自动更新设计](docs/superpowers/plans/2026-10-01-model-catalog-refresh.md)。
-
-这不是联网查询所有模型或承诺即时更新：需要官方 Codex 先取得新目录，运行中的窗口可能需要重开。缓存缺失或损坏时使用上次有效目录；没有有效目录则不添加覆盖项。若一直使用 API 登录且本地目录未更新，可先用官方账号登录 Codex 刷新目录，再切回 API 档。不会伪造模型、把隐藏模型强制显示或保证服务商有对应权限。显式配置的自定义模型目录和 API 档已选模型会保留，官方缓存和工作区不会被改写。
-
-### Astra 首条消息自动预热（可选）
-
-默认关闭。先切换到需要使用的 API 档，Windows 打开「设置 → Astra 首条消息预热」；macOS 在设置菜单中启用 Astra 预热。确认额外请求费用后，按 Codex 的提示亲自审查并信任用户级 hook，再重开 Codex。切换器不会代替你批准 hook，也不会在开启设置时发送请求。
-
-启用后，你在新会话中直接选择 `gpt-6-astra` 发送消息：工具先向同一 API 服务发送一次 `gpt-5.6-sol`、`low` 的固定短消息 `Reply only OK.`；成功后由官方 Codex 继续发送原来的 Astra 消息。原文、附件、工具和工作区内容不会发送给 Sol。同一账号的同一会话只在预热成功后记一次；失败会拦截原消息，你可以重试或关闭预热。
-
-这是实验性的服务端预热，不是在两个模型之间共享同一条网络连接，**不保证修复所有服务商的 Astra 首次连接问题**。服务商必须提供这两个模型与 Responses API；预热可能产生费用。每个 API 地址和 Key 分别授权，更换任意一个需重新启用。ChatGPT 登录及其他模型不会触发预热。仅支持默认用户目录中的文件 API 登录与内置 `openai` 路由，不支持自定义 provider/profile 或环境变量覆盖路由。
-
-关闭方法：切回对应 API 档，在同一入口选择关闭，再重开 Codex。卸载、移动或替换程序前，先逐个关闭已启用的 API 档；否则用户级 hook 仍可能指向旧文件。修改 `hooks.json` 前会保留备份，并保留其他 hook。官方客户端更新后若 hook 格式或运行时行为改变，应先关闭此实验功能并检查兼容性。
-
-预热安装路径支持普通空格和中文，但会拒绝可能被解释为命令的特殊字符；遇到路径安全提示，请把程序移到普通本地目录后再启用。
-
-## 数据与限制
-
-| 内容 | 位置 |
+| 项目 | 填写方式 |
 | --- | --- |
-| 共享会话、项目与活动登录 | `%USERPROFILE%\.codex` |
-| 加密账号库与恢复记录 | `%LOCALAPPDATA%\CodexAccountSwitcher` |
-| 程序 | 当前解压目录 |
+| 地址（Base URL） | 服务商提供的 Responses API 基础地址，例如 `https://api.example.com/v1`，不要加上末尾的 `/responses`。除本机测试地址外，必须使用 HTTPS。 |
+| API Key | 服务商提供的密钥。编辑已有配置时，留空会保留原 Key。 |
+| 模型 | 填写服务商实际支持的模型名称。 |
 
-上表为 Windows 路径。macOS 共享目录是 `~/.codex`，加密账号库在 `~/Library/Application Support/CodexAccountSwitcher`，密钥在本机登录钥匙串。两端加密库不互通，不提供跨电脑凭据迁移。
+服务必须支持 **Responses API**，只支持 Chat Completions 的接口不能直接使用。保存配置只检查填写格式；Windows 的「测试连接」会发送请求，可能消耗额度。macOS 暂无此按钮，且只能编辑当前未使用的 API 配置。
 
-两端都不按账号分离本地会话、项目、skills、插件、MCP 和工作区。账号切换只更新认证及必要路由；**共享本地数据不等于云端内容跨账号互通**。macOS 对复杂根配置、自定义 provider、配置 profile 和自定义 `CODEX_HOME` 会拒绝修改，详见 Mac 说明。
+### 模型列表怎么更新
 
-切换前必须退出所有使用共享目录的 Codex 进程；不支持不同账号并行运行。当前版本仅管理默认 `.codex`，不导入自定义 `CODEX_HOME`。首次导入支持内置 `openai` provider；已有自定义 provider 会被拒绝，不会静默重写，可先登录官方账号，再在工具中添加 API 档。
+切换器会读取本机 Codex 缓存的模型列表，并在打开切换器或切换到 API 账号时更新菜单所用的列表。它会保留你选中的模型和自定义模型列表。
 
-当前配置档和最后一个有效配置档不能删除。「重置 / 修复」用于校验和恢复，不是清空账号或历史的出厂重置。
+更新 Codex 后，先让官方客户端刷新模型列表，再打开切换器、重启 Codex。如果一直用 API 登录而列表没有更新，可先用 ChatGPT 账号登录 Codex 刷新，再切回 API。缓存无法读取时，切换器会保留上次有效的列表。
 
-共享的是本地历史，不保证不同账号的云端任务或云端同步互通。**切到另一 API 后，继续已有会话可能把该会话的历史发送给新服务商。** 仅使用你信任且允许接收这些内容的服务。
-
-活动 `auth.json` 仍是官方客户端需要读取的凭据文件；DPAPI 保护的是工具保存的副本，不抵御当前用户权限下的恶意程序。加密文件不应当作跨电脑可恢复的备份。详见 [安全说明](SECURITY.md)。
-
-## 常见问题
-
-<details>
-<summary><strong>展开安装、切换与卸载排查</strong></summary>
-
-- **提示进程仍在运行**：退出桌面、终端和编辑器集成后重试。工具不会强制结束你的任务。
-- **第一次没有账号**：双击应用后按向导完成浏览器登录，成功后自动导入。API-only 用户也可导入已由官方 CLI 保存的 API 登录。
-- **提示账号身份不一致**：若当前登录对应已注册账号，工具可校正状态；未知账号不会覆盖旧档。先备份再排查，不要手工删除凭据或恢复记录。
-- **切换成功但没启动**：登录已切换，确认官方桌面应用安装正常，再点相同配置档。
-- **移动了解压目录**：将 `.exe` 与 `app` 文件夹一起移动，仍可双击启动。桌面快捷方式需要指向新的 `.exe` 位置。
-- **如何卸载**：若开启了 Astra 预热，先在各已启用 API 档关闭预热，再删除程序目录和快捷方式。共享 `.codex` 与账号库不会自动删除，避免误删历史。若要永久移除凭据，先确认备份和当前登录。
-
-</details>
-
-## 验证与开发
+菜单里有某个模型，不代表你的 API 服务商支持它。具体同步方式见[模型列表更新说明](docs/superpowers/plans/2026-10-01-model-catalog-refresh.md)。
 
 ### 可选：Windows API Fast
 
-若 API 服务商和模型支持 Fast，可按 [API Fast 安装说明](tools/codex-api-fast/README.md)
-创建本地客户端副本，恢复 API 登录时的 Fast 入口。此功能默认不安装，另需 Node.js；
-不改写商店原包，也不分发修改后的客户端。副本启动器的官方签名会失效。
+可安装本地补丁，恢复 API 登录时的 Fast 按钮和请求设置。它默认不安装，另需 Node.js；补丁修改客户端副本，官方安装包保持原样，副本不再具有有效的官方签名。安装后需从切换器启动 API 账号，开始菜单仍打开原版。模型本身需要支持 Fast，实际是否加速、如何计费由 API 服务商决定。
 
-**问题：为什么 API 登录的 Fast 会在更新后消失？** 这个功能依赖对官方客户端内部
-逻辑的本地兼容修改。客户端既判断界面是否允许选择 Fast，也在发送请求前检查能否
-使用该速度档位；单纯显示按钮不能保证请求携带 `service_tier: "priority"`。
-官方更新后，旧副本会因版本不匹配停用；若这两处判断的结构也变了，旧补丁规则就需要更新。
+官方更新可能改变 Fast 的判断逻辑，**每个新版本都要验证兼容性**。开启自动重建后，代码结构仍兼容的版本会自动生成新副本；遇到不兼容的改动，需要让 agent 针对该版本修改补丁，同时检查按钮和请求设置。工具不会自行调用 agent，适配失败会提示并回到官方版。
 
-**解决：自动重建，加上按版本验证和必要的 agent 适配。** 可提前开启自动重建，
-启动 API 账户时会检测更新，并对已知结构生成、校验新副本。每个新版本都需验证兼容性，
-但不必每次重写脚本；遇到未知结构，需要让 agent 检查本机该版本的安装包，更新界面与
-请求两处匹配规则并补回归验证。当前自动流程不会自行调用 agent，也不能理解任意新版源码。
-不兼容时会明确提示并回到官方版，不保证未来每个版本都始终有 Fast。
+安装方法、失效原因和可直接交给 agent 的修复说明，见 [API Fast 文档](tools/codex-api-fast/README.md)。
 
-具体故障分类、处理步骤和可直接交给 agent 的任务说明，见
-[API Fast 更新问题与逐版本适配](tools/codex-api-fast/README.md#version-adaptation)。
+### Astra 首条消息预热（可选）
 
-两端 CI 包含模型目录回归和 Astra 预热测试。预热集成测试使用固定版本官方 Codex CLI 与本机模拟服务，验证 Sol → Astra 顺序、原消息保持不变、同会话不重复预热，以及失败时没有 Astra 请求；不调用真实付费模型。每次发布的实际验证结果见 Release 说明与对应提交的 Actions。
+这是尝试缓解 Astra 首次连接问题的实验功能，默认关闭，**不保证对所有服务商有效，并可能产生额外费用**。
 
-<details>
-<summary><strong>查看测试命令与兼容性边界</strong></summary>
+启用后，在新会话中向 `gpt-6-astra` 发送第一条消息前，工具会先向同一服务商的 `gpt-5.6-sol` 发送一句固定的 `Reply only OK.`（推理强度为 `low`）。成功后再发送原来的 Astra 消息；原文、附件和工作区内容不会发给 Sol。同一账号的同一会话预热成功后不会重复；失败时原消息会被拦截，可以重试或关闭预热。
 
-运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\chatgpt-account-switch\Test-All.ps1 -SkipSharedSessions` 执行离线 PowerShell/WPF 回归。测试使用临时目录和假凭据，不切换真实账号。
+先切到要使用的 API 账号，在设置中开启 Astra 预热，确认费用，再按 Codex 提示审查并信任预热脚本（hook），重启 Codex。服务商须支持上述两个模型。更换地址或 Key 后需重新启用；ChatGPT 登录和其他模型不会触发预热。登录信息须保存在默认 `.codex` 目录；手动配置的服务商（provider）、配置分组（profile）和环境变量指定的接口暂不支持。
 
-共享会话集成测试另需 Python 3.12+、`zstandard` 和官方 CLI：`python tools\chatgpt-account-switch\Test-SharedSessions.py`。它使用本地模拟服务，不发送真实付费请求。详见 [开发说明](CONTRIBUTING.md)。
+关闭时，切回对应 API 账号，在同一设置中关闭并重启 Codex。**移动、替换或卸载程序前，先关闭各账号的预热功能**，避免 Codex 继续调用旧路径。若更新后预热报错，也请先关闭；若提示安装路径不支持，请移到不含特殊字符的普通本地目录。
 
-Windows 预热集成测试：`python tools\chatgpt-account-switch\Test-AstraWarmupIntegration.py`。macOS 使用 CI 中构建的测试专用 `WarmupFixture`，该程序不会放入发布的 `.app`；日常使用不需要 Python。
+## 数据与限制
 
-2026-09-17 已在 Windows PowerShell 5.1 / Codex CLI 0.154.0 下验证公开包：12 组 PowerShell/WPF 回归通过；三路由共享会话集成测试的 9 次本地模拟请求通过；PowerShell 语法及发布清单检查通过。真实浏览器授权、不同机器的桌面启动和真实服务连接仍需用户验收。官方客户端更新可能改变认证或配置格式；请先备份再升级。
+| 内容 | Windows | macOS |
+| --- | --- | --- |
+| 本地会话、项目与当前登录 | `%USERPROFILE%\.codex` | `~/.codex` |
+| 切换器保存的账号与恢复记录 | `%LOCALAPPDATA%\CodexAccountSwitcher` | `~/Library/Application Support/CodexAccountSwitcher` |
+| 程序 | 解压目录 | Applications 中的应用 |
 
-</details>
+所有账号共用本地会话、项目、技能、插件和工作区，云端内容仍属于各自账号。**切换到另一 API 后继续旧会话，可能会把历史消息发给新的服务商。** 请确认对方可以接收这些内容。
 
-当前为公开预览版。真实浏览器授权、不同机器的桌面启动和真实 API 服务仍需人工验收；首次安装和升级前请备份。
+切换时，同一目录不能被其他 Codex 进程占用，也不支持同时运行不同账号。当前只管理默认 `.codex` 目录，不支持自定义 `CODEX_HOME`；首次导入也不支持自定义服务商配置（provider）。使用自定义服务商的用户，可先在默认目录中通过官方账号登录，再在切换器里添加 API。Mac 对其他复杂配置的限制见 [Mac 说明](macos/README.md)。
 
-2026-09-23 [Mac CI](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35837051191) 已通过 **16 项 Swift 测试、9 次本地模拟共享会话请求、arm64/x86_64 双架构构建、签名/包检查及原生窗口渲染**；[Windows 回归](https://github.com/sheyinjue-a11y/codex-account-switcher/actions/runs/35837051294) 同时通过。测试不读取真实凭据、不请求付费模型；编译通过不代表真实账号端到端验收。
+当前使用的配置和最后一个有效配置不能删除。「重置 / 修复」用于检查和恢复配置，不会清空账号和历史。
+
+账号库使用本机加密，不能直接搬到另一台电脑或另一种系统使用。Codex 使用中的登录文件仍可被当前用户权限下的程序读取；加密账号库不能防止这类程序窃取信息。详见[安全说明](SECURITY.md)。
+
+## 常见问题
+
+- **提示 Codex 仍在运行**：退出桌面端、终端和编辑器中的 Codex 后重试。工具不会强制结束任务。
+- **第一次打开没有账号**：按向导完成浏览器登录后会自动导入；只用 API 的用户也可导入官方 CLI 已保存的 API 登录。
+- **提示账号身份不一致**：若当前登录是已保存的账号，工具可校正状态；不认识的账号不会覆盖旧配置。先备份再排查，不要直接删除登录文件或恢复记录。
+- **切换成功但 Codex 没打开**：确认官方桌面端安装正常，再点一次同一账号。
+- **移动了程序目录**：Windows 的 `.exe` 与 `app` 文件夹要一起移动，并更新桌面快捷方式；已开启 Astra 预热的账号须先关闭预热。
+- **如何卸载**：先关闭各账号的 Astra 预热，再删除程序和快捷方式。账号库与 `.codex` 会保留；如需删除登录信息，先确认备份和当前使用的账号。
+
+## 验证与开发
+
+自动测试使用临时目录、模拟登录信息和本机模拟服务，检查账号切换、共享会话、模型列表和 Astra 预热，不调用真实付费模型。运行方法见[开发说明](CONTRIBUTING.md)，API Fast 的测试见其[专门文档](tools/codex-api-fast/README.md#验证)。
+
+项目仍为公开预览版。自动测试不能覆盖每台电脑的浏览器登录、桌面启动和 API 服务；具体版本的测试结果见 [Actions](https://github.com/sheyinjue-a11y/codex-account-switcher/actions) 和[发布说明](https://github.com/sheyinjue-a11y/codex-account-switcher/releases)。
 
 ## 许可证
 
-[MIT](LICENSE)。OpenAI、Codex、ChatGPT 名称归相应权利人所有；公开包不包含从官方客户端提取的图标，也不暗示官方背书。
+[MIT](LICENSE)。这是独立社区项目，与 OpenAI 无隶属关系。OpenAI、Codex、ChatGPT 名称归相应权利人所有。
