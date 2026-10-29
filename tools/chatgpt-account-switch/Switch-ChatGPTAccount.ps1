@@ -512,6 +512,106 @@ function Assert-CodexQuiescent {
     }
 }
 
+function Get-ChatGPTDesktopDirectories {
+    # Only the desktop client keeps auth.json in memory. The codex.exe helpers
+    # the VS Code extension spawns re-read it on every call, so they must not
+    # block a switch.
+    $directories = @()
+    $package = Get-CodexPackage
+    if ($package) { $directories += (Join-Path $package.InstallLocation 'app') }
+    $localRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex-api-fast-client\versions'
+    if (Test-Path -LiteralPath $localRoot -PathType Container) {
+        foreach ($version in @(Get-ChildItem -LiteralPath $localRoot -Directory -Force -ErrorAction SilentlyContinue)) { $directories += $version.FullName }
+    }
+    return @($directories | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') + '\' })
+}
+
+function Get-DesktopClientProcess {
+    # The single place that decides "is this process the desktop client?".
+    # The caller owns Disposal of the returned objects.
+    $prefixes = @(Get-ChatGPTDesktopDirectories)
+    if (-not $prefixes.Count) { return @() }
+    $matches = @()
+    foreach ($candidate in @(Get-Process -Name ChatGPT -ErrorAction SilentlyContinue)) {
+        $path = ''
+        try { $path = [string]$candidate.Path } catch { }
+        $isClient = $false
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            foreach ($prefix in $prefixes) {
+                if ($path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { $isClient = $true; break }
+            }
+        }
+        if ($isClient) { $matches += $candidate } else { try { $candidate.Dispose() } catch { } }
+    }
+    return $matches
+}
+
+function Get-ChatGPTDesktopProcesses {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+
+    if ($Settings.SimulateBusy) { return @([pscustomobject]@{ Name = 'ChatGPT.exe'; ProcessId = 4242 }) }
+    if ($Settings.SkipProcessCheck) { return @() }
+    $result = @()
+    foreach ($candidate in @(Get-DesktopClientProcess)) {
+        $result += [pscustomobject]@{ Name = $candidate.ProcessName + '.exe'; ProcessId = $candidate.Id }
+        try { $candidate.Dispose() } catch { }
+    }
+    return $result
+}
+
+function Stop-ChatGPTDesktopClient {
+    # A running client keeps the previous token in memory, so activating the
+    # package after a switch only brings the old window forward and the account
+    # appears unchanged. The switch owns the restart.
+    # Returns $true only when the client was running and is now gone; a caller
+    # that gets $true must guarantee the app comes back on every exit path.
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+
+    if ($Settings.TestMode -or $Settings.SkipProcessCheck -or $Settings.SimulateBusy) { return $false }
+    $running = @(Get-DesktopClientProcess)
+    if (-not $running.Count) { return $false }
+    foreach ($item in $running) { try { $null = $item.CloseMainWindow() } catch { } }
+    $graceful = [DateTime]::UtcNow.AddSeconds(2)
+    while ([DateTime]::UtcNow -lt $graceful) {
+        if (-not @($running | Where-Object { try { -not $_.HasExited } catch { $false } }).Count) { break }
+        Start-Sleep -Milliseconds 100
+    }
+    foreach ($item in $running) {
+        try { if (-not $item.HasExited) { $item.Kill() } } catch { }
+        try { $item.Dispose() } catch { }
+    }
+    # Killing a dozen Electron processes takes time: wait for the actual exit so
+    # a half-dead process tree cannot abort the switch after the client closed.
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $left = @(Get-DesktopClientProcess)
+        if (-not $left.Count) { return $true }
+        foreach ($item in $left) { try { $item.Dispose() } catch { } }
+        Start-Sleep -Milliseconds 100
+    }
+    return $true
+}
+
+function Restore-ChatGPTDesktopClient {
+    # Best effort: a failed switch must never leave the user without a client.
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings, [bool]$WasClosed)
+
+    if (-not $WasClosed) { return }
+    try { Start-SharedChatGPT $Settings } catch { }
+}
+
+function Assert-ChatGPTDesktopQuiescent {
+    # Runs after Stop-ChatGPTDesktopClient: a client that survived the attempt
+    # means the credentials must not be rewritten underneath it.
+    param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
+
+    $running = @(Get-ChatGPTDesktopProcesses -Settings $Settings)
+    if ($running.Count -gt 0) {
+        $summary = ($running | ForEach-Object { '{0}({1})' -f $_.Name, $_.ProcessId }) -join ', '
+        throw "Account switching requires all Codex desktop client processes to exit. Running: $summary"
+    }
+}
+
 function Get-ActiveProfileFromHome {
     param([Parameter(Mandatory = $true)][pscustomobject]$Settings)
 
@@ -571,10 +671,22 @@ function Test-CodexLoginStatus {
     return $matches
 }
 
-function Get-ChatGPTExecutable {
-    $package = Get-AppxPackage -Name 'OpenAI.Codex' |
+$script:codexPackageResolved = $false
+$script:codexPackage = $null
+function Get-CodexPackage {
+    # A live Appx query costs ~0.4 s and the launch path needs the same package
+    # three or four times. Resolve it once per process; a missing package is
+    # cached too so an uninstalled client fails fast.
+    if ($script:codexPackageResolved) { return $script:codexPackage }
+    $script:codexPackage = Get-AppxPackage -Name 'OpenAI.Codex' |
         Sort-Object Version -Descending |
         Select-Object -First 1
+    $script:codexPackageResolved = $true
+    return $script:codexPackage
+}
+
+function Get-ChatGPTExecutable {
+    $package = Get-CodexPackage
     if (-not $package) {
         throw 'OpenAI.Codex (ChatGPT desktop app) is not installed.'
     }
@@ -589,7 +701,7 @@ function Get-ChatGPTExecutable {
 }
 
 function Get-ChatGPTAppUserModelId {
-    $package = Get-AppxPackage -Name 'OpenAI.Codex' | Sort-Object Version -Descending | Select-Object -First 1
+    $package = Get-CodexPackage
     if (-not $package) { throw 'OpenAI.Codex desktop executable is not installed.' }
     [xml]$manifest = [IO.File]::ReadAllText((Join-Path $package.InstallLocation 'AppxManifest.xml'))
     $application = @($manifest.Package.Applications.Application | Where-Object {
@@ -654,17 +766,15 @@ namespace CodexSwitcher {
 }
 
 function Test-ChatGPTDesktopWindow([string]$AppUserModelId) {
-    $package = Get-AppxPackage -Name 'OpenAI.Codex' | Where-Object {
-        $_.PackageFamilyName -eq ($AppUserModelId -split '!')[0]
-    } | Sort-Object Version -Descending | Select-Object -First 1
+    # Liveness probe for the launch guard: a client process with a window means
+    # the activation handed off, so the guard can stop waiting.
+    $package = Get-CodexPackage
     if (-not $package) { return $false }
-    $appDirectory = (Join-Path $package.InstallLocation 'app').TrimEnd('\') + '\'
-    foreach ($candidate in @(Get-Process -Name ChatGPT, Codex -ErrorAction SilentlyContinue)) {
+    if ($package.PackageFamilyName -ne ($AppUserModelId -split '!')[0]) { return $false }
+    foreach ($candidate in @(Get-DesktopClientProcess)) {
         try {
-            if ($candidate.MainWindowHandle -ne [IntPtr]::Zero -and $candidate.Path.StartsWith($appDirectory, [StringComparison]::OrdinalIgnoreCase)) {
-                return $true
-            }
-        } catch { } finally { $candidate.Dispose() }
+            if ($candidate.MainWindowHandle -ne [IntPtr]::Zero) { return $true }
+        } catch { } finally { try { $candidate.Dispose() } catch { } }
     }
     return $false
 }
@@ -713,7 +823,17 @@ function Start-SharedChatGPT {
         throw 'ChatGPT application launch ended before startup completed.'
     }
     try {
-        if ($started.WaitForExit(3000) -and -not (Test-ChatGPTDesktopWindow $appUserModelId)) {
+        # Watch briefly for an immediate crash, but stop waiting as soon as the
+        # window is up: the picker stays open until this returns, so a fixed
+        # multi-second wait is time the user spends staring at the picker.
+        $deadline = [DateTime]::UtcNow.AddMilliseconds(1500)
+        $windowUp = $false
+        while ([DateTime]::UtcNow -lt $deadline) {
+            if (Test-ChatGPTDesktopWindow $appUserModelId) { $windowUp = $true; break }
+            if ($started.HasExited) { break }
+            Start-Sleep -Milliseconds 150
+        }
+        if (-not $windowUp -and $started.HasExited -and -not (Test-ChatGPTDesktopWindow $appUserModelId)) {
             throw 'ChatGPT application launch exited during startup.'
         }
     } finally { $started.Dispose() }
@@ -721,9 +841,24 @@ function Start-SharedChatGPT {
 }
 
 function Show-ApiFastDegradedNotice([string]$Detail) {
+    # A toast does not block the launcher; the modal popup is only a fallback so
+    # a missing Fast toggle is still reported where WinRT is unavailable.
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+        $template = [Windows.UI.Notifications.ToastTemplateType]::ToastText02
+        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($template)
+        $nodes = $xml.GetElementsByTagName('text')
+        $nodes.Item(0).AppendChild($xml.CreateTextNode('Codex: Fast unavailable; official client started')) | Out-Null
+        $nodes.Item(1).AppendChild($xml.CreateTextNode($Detail)) | Out-Null
+        $toast = New-Object Windows.UI.Notifications.ToastNotification($xml)
+        $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+        return
+    } catch { }
     try {
         $shell = New-Object -ComObject WScript.Shell
-        $null = $shell.Popup($Detail, 20, 'Codex: Fast unavailable; official client started', 64)
+        $null = $shell.Popup($Detail, 8, 'Codex: Fast unavailable; official client started', 64)
     } catch { Write-Warning $Detail }
 }
 

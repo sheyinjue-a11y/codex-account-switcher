@@ -58,6 +58,12 @@ try {
         Check ($LASTEXITCODE -ne 0 -and (Test-Path (Get-TransactionPath $s switch))) "Process interrupted at $point with journal."
         $s.SimulateBusy=$true; Reject { Restore-AllPendingOperations $s } 'Busy recovery is refused.'; $s.SimulateBusy=$false
         Restore-AllPendingOperations $s
+        # Regression: the quiescence requirement used to run even when there was
+        # nothing to recover, so an open Codex (or the VS Code codex.exe helpers)
+        # refused ordinary switches. Nothing pending means nothing to recover.
+        $s.SimulateBusy=$true
+        try { $null = Restore-AllPendingOperations $s; Check $true 'A busy client does not block a switch with nothing to recover.' }
+        finally { $s.SimulateBusy=$false }
         $after=Snapshot $s
         Check ($after.Count -eq $before.Count) 'Recovery restores exact file set.'
         foreach($path in $before.Keys) { Check ($after[$path] -eq $before[$path]) ('Restored '+[IO.Path]::GetFileName($path)) }

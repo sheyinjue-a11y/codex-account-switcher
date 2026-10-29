@@ -41,6 +41,27 @@ try {
     $failed = $false
     try { Get-LocalApiFastInstallation | Out-Null } catch { $failed = $_.Exception.Message -match 'Unexpected local Fast directory' }
     Check $failed 'A manifest cannot redirect launch outside the version directory.'
+
+    # Regression: the launch used to adjust the child environment through
+    # ProcessStartInfo.EnvironmentVariables, which throws under Windows
+    # PowerShell 5.1, so every Fast launch failed and silently fell back to the
+    # official client. Building the start info must not touch that dictionary,
+    # and the process environment must be restored even when launching fails.
+    $data.directory = $app
+    $data | ConvertTo-Json | Set-Content -LiteralPath $manifest
+    function Get-AppxPackage { param($Name) [pscustomobject]@{PackageFullName='fixture';Version='1.2.3.4';PackageFamilyName='OpenAI.Codex_fixture'} }
+    $probeName = 'CODEX_SWITCHER_ENV_PROBE'
+    [Environment]::SetEnvironmentVariable($probeName, 'probe-value')
+    $saved = Set-LocalApiFastEnvironment
+    try {
+        Check ($null -eq [Environment]::GetEnvironmentVariable('CODEX_HOME')) 'The private client launches without an inherited Codex home.'
+        Check ([Environment]::GetEnvironmentVariable($probeName) -eq 'probe-value') 'Unrelated variables are left alone for the child process.'
+    } finally { Restore-LocalApiFastEnvironment $saved }
+    Check ([Environment]::GetEnvironmentVariable($probeName) -eq 'probe-value') 'The launch restores the environment it borrowed.'
+    [Environment]::SetEnvironmentVariable($probeName, $null)
+    $startInfo = New-LocalApiFastProcessStartInfo $app
+    Check ($startInfo.FileName -eq (Join-Path $app 'ChatGPT.exe')) 'A start info can be built without ProcessStartInfo.EnvironmentVariables.'
+    Check ($startInfo.UseShellExecute -eq $false) 'The client is started directly so the switcher can watch its startup.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixtureRoot)
     $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'

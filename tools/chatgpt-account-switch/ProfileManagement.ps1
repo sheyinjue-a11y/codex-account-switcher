@@ -200,7 +200,22 @@ function Remove-ProfileOperationDirectory($Settings,[string]$Path,[ValidateSet('
     if ((Test-Path -LiteralPath $parent) -and @(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) { Remove-Item -LiteralPath $parent -Force }
 }
 
+function Test-ProfileOperationPending($Settings) {
+    foreach ($type in @('switch','management')) {
+        if (Test-Path -LiteralPath (Get-TransactionPath $Settings $type) -PathType Leaf) { return $true }
+    }
+    $staging=Join-Path $Settings.VaultRoot 'staging'
+    if ((Test-Path -LiteralPath $staging -PathType Container) -and
+        @(Get-ChildItem -LiteralPath $staging -Directory -Force -ErrorAction SilentlyContinue).Count) { return $true }
+    return $false
+}
+
 function Restore-AllPendingOperations($Settings) {
+    # Recovery rewrites auth.json and config.toml, so it must not run while the
+    # client is live. A healthy switch has nothing to recover: requiring the
+    # client (and every VS Code codex.exe helper) to be closed first refused
+    # ordinary switches for no reason.
+    if (-not (Test-ProfileOperationPending $Settings)) { return }
     Assert-CodexQuiescent $Settings
     Restore-ProfileTransaction $Settings switch
     Restore-ProfileTransaction $Settings management
@@ -283,7 +298,10 @@ function Test-ProfileBackend($Settings,$Profile) {
     if ($Settings.SkipCodexStatus) { return $true }
     $info=New-IsolatedCodexStartInfo (Get-Command codex.exe -ErrorAction Stop).Source $Settings.CanonicalHome 'login status'
     $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
-    $process=[Diagnostics.Process]::Start($info)
+    # ProcessStartInfo.EnvironmentVariables is not writable in this host, so the
+    # isolated environment is applied to the process and restored after launch.
+    $saved = Set-IsolatedCodexEnvironment $Settings.CanonicalHome
+    try { $process=[Diagnostics.Process]::Start($info) } finally { Restore-IsolatedCodexEnvironment $saved }
     $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
     try {
         if (-not $process.WaitForExit(20000)) { $process.Kill(); $process.WaitForExit(); return $false }
@@ -402,6 +420,13 @@ function Invoke-ProfileSwitch($Settings,[string]$TargetProfileId,[switch]$WhatIf
         $keys=@('auth','config','state',('auth:'+$active.id),('route:'+$active.id))
         if ($target.id -eq 'lab') { $keys+=@('route:lab','labCatalog') }
         if ($target.kind -eq 'responses_api') { $keys+=@('apiCatalog','labCatalog') }
+        # Close the desktop client before the credentials change: a live client
+        # would keep the previous account in memory and make the switch look
+        # ignored. Once it is closed every exit path below puts it back, so a
+        # failure can never leave the user without a client.
+        $closedClient=[bool](Stop-ChatGPTDesktopClient $Settings)
+        try { Assert-ChatGPTDesktopQuiescent $Settings }
+        catch { Restore-ChatGPTDesktopClient $Settings $closedClient; throw }
         $tx=Start-ProfileTransaction $Settings switch switch ($keys | Select-Object -Unique)
         try {
             Write-ProfileAuth $Settings $active (Read-AuthBytes (Join-Path $Settings.CanonicalHome 'auth.json'))
@@ -420,12 +445,20 @@ function Invoke-ProfileSwitch($Settings,[string]$TargetProfileId,[switch]$WhatIf
             Write-ProfileState $Settings $target.id ($state.generation+1)
             Invoke-ProfileFailurePoint $Settings 'AfterStateWrite'
             Complete-ProfileTransaction $Settings switch $tx
-        } catch { Restore-ProfileTransaction $Settings switch; throw }
+        } catch {
+            Restore-ProfileTransaction $Settings switch
+            Restore-ChatGPTDesktopClient $Settings $closedClient
+            throw
+        }
         finally { [Array]::Clear($targetBytes,0,$targetBytes.Length) }
         Write-SwitchAudit $Settings Switch $active.id $target.id
         if (-not $DoNotLaunch) {
+            # Keep the original cause: without it the picker only showed a
+            # generic "could not be launched" note and hid a blocked package.
             try { Start-SharedChatGPT $Settings }
-            catch { throw 'Profile switched to the selected profile, but the desktop app could not be launched. Retry the same profile.' }
+            catch {
+                throw ('Profile switched to the selected profile, but the desktop app could not be launched. ' + [string]$_.Exception.Message)
+            }
         }
     } finally { $mutex.ReleaseMutex(); $mutex.Dispose() }
 }
@@ -625,9 +658,28 @@ function New-IsolatedCodexStartInfo([string]$CodexPath,[string]$CodexHome,[strin
     $info.FileName=$CodexPath; $info.Arguments=$Arguments
     $info.UseShellExecute=$false; $info.CreateNoWindow=$true
     $info.WorkingDirectory=$CodexHome
-    $info.EnvironmentVariables['CODEX_HOME']=$CodexHome
-    foreach ($name in @('OPENAI_API_KEY','CODEX_API_KEY','CODEX_ACCESS_TOKEN','OPENAI_BASE_URL','CODEX_SQLITE_HOME','CODEX_APP_SERVER_OPENAI_BASE_URL','CODEX_APP_SERVER_CHATGPT_BASE_URL')) { $null=$info.EnvironmentVariables.Remove($name) }
+    # The child environment is prepared by Set-IsolatedCodexEnvironment at each
+    # call site. Under Windows PowerShell 5.1 ProcessStartInfo.EnvironmentVariables
+    # is unusable: Remove() throws, and assigning a single entry replaces the
+    # inherited block with only that entry, so the child loses PATH and TEMP.
+    # Only the process environment is reliably inherited.
     return $info
+}
+
+function Set-IsolatedCodexEnvironment([string]$CodexHome) {
+    $saved = @{ Home = [Environment]::GetEnvironmentVariable('CODEX_HOME'); Cleared = @{} }
+    [Environment]::SetEnvironmentVariable('CODEX_HOME', $CodexHome)
+    foreach ($name in @('OPENAI_API_KEY','CODEX_API_KEY','CODEX_ACCESS_TOKEN','OPENAI_BASE_URL','CODEX_SQLITE_HOME','CODEX_APP_SERVER_OPENAI_BASE_URL','CODEX_APP_SERVER_CHATGPT_BASE_URL')) {
+        $saved.Cleared[$name] = [Environment]::GetEnvironmentVariable($name)
+        [Environment]::SetEnvironmentVariable($name, $null)
+    }
+    return $saved
+}
+
+function Restore-IsolatedCodexEnvironment($Saved) {
+    if ($null -eq $Saved) { return }
+    [Environment]::SetEnvironmentVariable('CODEX_HOME', $Saved.Home)
+    foreach ($name in @($Saved.Cleared.Keys)) { [Environment]::SetEnvironmentVariable($name, $Saved.Cleared[$name]) }
 }
 
 function Invoke-CodexBrowserLogin([string]$CodexPath,[string]$CodexHome,[string]$CancelPath='', [int]$TimeoutSeconds=600) {
@@ -637,7 +689,11 @@ function Invoke-CodexBrowserLogin([string]$CodexPath,[string]$CodexHome,[string]
     }
     $info=New-IsolatedCodexStartInfo $CodexPath $CodexHome 'login'
     $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
-    $process=[Diagnostics.Process]::Start($info)
+    # Without this the login CLI would write auth.json into the ambient
+    # CODEX_HOME instead of the isolated staging directory, so the caller would
+    # never find the credential it just obtained.
+    $saved = Set-IsolatedCodexEnvironment $CodexHome
+    try { $process=[Diagnostics.Process]::Start($info) } finally { Restore-IsolatedCodexEnvironment $saved }
     # Only the short OAuth CLI owns these pipes; desktop launches never use this path.
     $outTask=$process.StandardOutput.ReadToEndAsync(); $errTask=$process.StandardError.ReadToEndAsync()
     $deadline=[DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -693,9 +749,17 @@ function Test-ResponsesApiConnection($Settings,$Request) {
     try {
         Write-AtomicText (Join-Path $staging 'config.toml') ((Set-ProviderRoute "cli_auth_credentials_store = `"file`"`r`n" $route)+"`r`n[features]`r`nplugins = false`r`n[analytics]`r`nenabled = false`r`n")
         $info=New-IsolatedCodexStartInfo (Get-Command codex.exe).Source $staging 'exec --ephemeral --skip-git-repo-check --sandbox read-only --color never "Reply OK only. Do not use tools."'
-        $info.EnvironmentVariables['OPENAI_API_KEY']=$key
         $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
-        $process=[Diagnostics.Process]::Start($info)
+        # The key is injected only into this short-lived child's environment.
+        # ProcessStartInfo environment writes are not honoured in this host, so
+        # apply it to the process and clear it again immediately after launch.
+        $saved = Set-IsolatedCodexEnvironment $staging
+        try {
+            [Environment]::SetEnvironmentVariable('OPENAI_API_KEY', $key)
+            $process=[Diagnostics.Process]::Start($info)
+        } finally {
+            Restore-IsolatedCodexEnvironment $saved
+        }
         $outTask=$process.StandardOutput.ReadToEndAsync(); $errTask=$process.StandardError.ReadToEndAsync()
         try {
             if (-not $process.WaitForExit(60000)) { $process.Kill(); $process.WaitForExit(); return [pscustomobject]@{success=$false;message='Connection test timed out. You can still save this profile.'} }
