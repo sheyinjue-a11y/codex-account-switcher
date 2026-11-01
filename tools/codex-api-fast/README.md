@@ -119,7 +119,7 @@ Fast，请求准备逻辑再判断是否保留所选速度档位。只改按钮�
 
 每次启动检查商店版本，以及副本的 EXE、ASAR、运行库哈希。启用自动适配后，
 不一致时先尝试重建；未开启或适配失败时提示并回到官方版。
-也可手动运行 `Rebuild-LocalApiFastClient.cmd`。安装器串行构建到临时目录，完整
+也可在本工具目录运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-LocalApiFastClient.ps1` 手动重建。安装器串行构建到临时目录，完整
 验证后才原子切换清单；失败保留旧清单，已有未知目录移入 quarantine 留供排查。
 中断后已完成的版本可通过其独立清单验证并恢复，失败构建保留供排查。
 
